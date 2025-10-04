@@ -211,3 +211,6 @@ prd.md
 
 # Security evaluation reports
 reports/*.json
+
+# IDE settings
+.vscode/
