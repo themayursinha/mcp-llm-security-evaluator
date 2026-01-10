@@ -1,9 +1,21 @@
 import os
 import asyncio
 from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, Query, BackgroundTasks
+from fastapi import (
+    FastAPI,
+    Depends,
+    HTTPException,
+    Query,
+    BackgroundTasks,
+    WebSocket,
+    WebSocketDisconnect,
+    Request,
+)
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select, col
 from datetime import datetime
+from pathlib import Path
 
 from .database import engine, create_db_and_tables, save_report_to_db
 from .models import EvaluationReport
@@ -19,6 +31,31 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# Setup templates
+template_dir = Path(__file__).parent / "templates"
+templates = Jinja2Templates(directory=str(template_dir))
+
+
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request):
+    """Serve the live monitor as the home page."""
+    return templates.TemplateResponse("monitor.html", {"request": request})
+
+
+@app.get("/monitor", response_class=HTMLResponse)
+async def monitor_page(request: Request):
+    """Serve the live monitor page."""
+    return templates.TemplateResponse("monitor.html", {"request": request})
+
+
+@app.get("/ui/reports", response_class=HTMLResponse)
+async def reports_page(request: Request):
+    """Serve a historical reports browser (TBD)."""
+    # For now, redirect or serve a simple list
+    return templates.TemplateResponse(
+        "monitor.html", {"request": request}
+    )  # Fallback to monitor
+
 
 @app.on_event("startup")
 def on_startup():
@@ -30,22 +67,86 @@ def get_db_session():
         yield session
 
 
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: dict):
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception:
+                # Connection might be closed
+                continue
+
+
+manager = ConnectionManager()
+
+
+@app.websocket("/ws/events")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Keep connection alive
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
+
 async def run_evaluation_task(profile: str, provider: str, model: Optional[str] = None):
     """Background task to run evaluation and save to DB."""
+
+    async def progress_callback(update: dict):
+        await manager.broadcast({"type": "progress", "payload": update})
+
     try:
         llm_kwargs = {}
         if model:
             llm_kwargs["model"] = model
 
         evaluator = SecurityEvaluator(
-            llm_provider=provider, profile=profile, **llm_kwargs
+            llm_provider=provider,
+            profile=profile,
+            progress_callback=progress_callback,
+            **llm_kwargs,
         )
 
         report = await evaluator.run_evaluation_suite()
-        save_report_to_db(report)
+        db_report = save_report_to_db(report)
+
+        # Send completion event and alert check
+        summary = report.get("summary", {})
+        score = summary.get("overall_security_score", 0.0)
+        threshold = Config.SECURITY_THRESHOLD
+
+        alert = None
+        if score < threshold:
+            alert = f"SECURITY ALERT: Overall score {score}% is below threshold {threshold}%!"
+            logger.warning(alert)
+
+        await manager.broadcast(
+            {
+                "type": "complete",
+                "payload": {
+                    "summary": summary,
+                    "alert": alert,
+                    "report_id": db_report.id,
+                },
+            }
+        )
         logger.info(f"Evaluation completed and saved for profile: {profile}")
     except Exception as e:
         logger.error(f"Background evaluation failed: {e}")
+        await manager.broadcast({"type": "error", "payload": str(e)})
 
 
 @app.get("/health")

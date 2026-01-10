@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}Live Security Monitor - MCP LLM{% endblock %}
+
+{% block extra_css %}
+<style>
+    .terminal {
+        background-color: #000;
+        color: #0f0;
+        font-family: 'Courier New', Courier, monospace;
+        padding: 15px;
+        border-radius: 5px;
+        height: 500px;
+        overflow-y: auto;
+        border: 1px solid #333;
+        box-shadow: inset 0 0 10px #000;
+    }
+
+    .terminal-line {
+        margin-bottom: 5px;
+        border-bottom: 1px solid #111;
+        padding-bottom: 2px;
+    }
+
+    .status-running {
+        color: #0cf;
+    }
+
+    .status-complete {
+        color: #0f1;
+        font-weight: bold;
+    }
+
+    .status-error {
+        color: #f33;
+    }
+
+    .alert-banner {
+        display: none;
+        margin-top: 1rem;
+    }
+
+    .hud-label {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        color: #888;
+        margin-bottom: 0;
+    }
+
+    .hud-value {
+        font-size: 1.2rem;
+        font-weight: bold;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white d-flex align-items-center">
+                <i class="fas fa-radar me-2"></i> Evaluation HUD
+            </div>
+            <div class="card-body">
+                <div class="mb-4">
+                    <p class="hud-label">Progress</p>
+                    <div class="progress" style="height: 10px;">
+                        <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated"
+                            role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <div class="text-end mt-1"><small id="progress-percent">0%</small></div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-6">
+                        <p class="hud-label">Step</p>
+                        <p id="current-step" class="hud-value text-primary">-</p>
+                    </div>
+                    <div class="col-6">
+                        <p class="hud-label">Provider</p>
+                        <p id="current-provider" class="hud-value">-</p>
+                    </div>
+                    <div class="col-12">
+                        <p class="hud-label">Current Task</p>
+                        <p id="current-task" class="hud-value" style="font-size: 1rem;">Waiting...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="alert-card" class="card border-danger alert-banner animate__animated animate__shakeX">
+            <div class="card-header bg-danger text-white">
+                <i class="fas fa-exclamation-triangle"></i> Security Alert
+            </div>
+            <div class="card-body text-danger" id="alert-text"></div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header bg-info text-white">
+                <i class="fas fa-info-circle"></i> Quick Actions
+            </div>
+            <div class="card-body">
+                <button class="btn btn-outline-primary w-100 mb-2" onclick="startNewEvaluation()">
+                    <i class="fas fa-play"></i> Run Standard Suite
+                </button>
+                <button class="btn btn-outline-secondary w-100" onclick="window.location.href='/reports'">
+                    <i class="fas fa-history"></i> View All Reports
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center bg-dark text-white">
+                <span><i class="fas fa-terminal me-2"></i> Live Event Stream</span>
+                <span id="connection-status" class="badge bg-secondary">Disconnected</span>
+            </div>
+            <div class="card-body p-0">
+                <div id="terminal" class="terminal">
+                    <div class="terminal-line text-muted">Ready for evaluation stream...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const terminal = document.getElementById('terminal');
+    const progressBar = document.getElementById('progress-bar');
+    const progressPercent = document.getElementById('progress-percent');
+    const currentStep = document.getElementById('current-step');
+    const currentTask = document.getElementById('current-task');
+    const connStatus = document.getElementById('connection-status');
+    const alertCard = document.getElementById('alert-card');
+    const alertText = document.getElementById('alert-text');
+
+    function log(message, type = '') {
+        const line = document.createElement('div');
+        line.className = `terminal-line ${type}`;
+        line.innerHTML = `<span class="text-white-50">[${new Date().toLocaleTimeString()}]</span> ${message}`;
+        terminal.appendChild(line);
+        terminal.scrollTop = terminal.scrollHeight;
+
+        // Keep logs from growing too large
+        if (terminal.childElementCount > 100) {
+            terminal.removeChild(terminal.firstElementChild);
+        }
+    }
+
+    function setupWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws/events`);
+
+        ws.onopen = () => {
+            connStatus.textContent = 'Live';
+            connStatus.className = 'badge bg-success pulse';
+            log('WebSocket connection established. Monitoring live events...');
+        };
+
+        ws.onclose = () => {
+            connStatus.textContent = 'Disconnected';
+            connStatus.className = 'badge bg-danger';
+            log('WebSocket connection closed. Retrying in 5s...', 'status-error');
+            setTimeout(setupWebSocket, 5000);
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            const payload = data.payload;
+
+            if (data.type === 'progress') {
+                currentStep.textContent = payload.step.toUpperCase();
+                currentTask.textContent = payload.message;
+
+                const percent = Math.round((payload.current / payload.total) * 100);
+                progressBar.style.width = `${percent}%`;
+                progressPercent.textContent = `${percent}%`;
+                log(payload.message, 'status-running');
+
+                // Reset alert if new evaluation starts
+                if (payload.current === 1) {
+                    alertCard.style.display = 'none';
+                    progressBar.classList.add('progress-bar-animated');
+                }
+            } else if (data.type === 'complete') {
+                progressBar.style.width = '100%';
+                progressPercent.textContent = '100%';
+                progressBar.classList.remove('progress-bar-animated');
+                log('✓ SECURITY EVALUATION COMPLETED', 'status-complete');
+
+                if (payload.report_id) {
+                    log(`Full Report: <a href="/reports/${payload.report_id}" target="_blank" class="text-info">Report #${payload.report_id}</a>`, 'status-complete');
+                }
+
+                if (payload.alert) {
+                    alertCard.style.display = 'block';
+                    alertText.innerHTML = `<strong>${payload.alert}</strong>`;
+                    log(`☢ ALERT: ${payload.alert}`, 'status-error');
+                }
+            } else if (data.type === 'error') {
+                log(`✖ ERROR: ${payload}`, 'status-error');
+            }
+        };
+    }
+
+    function startNewEvaluation() {
+        fetch('/evaluate', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                log(`Evaluation triggered via API: ${data.message}`);
+                alertCard.style.display = 'none';
+            })
+            .catch(e => log(`Failed to start evaluation: ${e}`, 'status-error'));
+    }
+
+    // Initialize
+    setupWebSocket();
+</script>
+{% endblock %}

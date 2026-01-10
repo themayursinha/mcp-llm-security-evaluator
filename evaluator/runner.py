@@ -2,7 +2,7 @@ import os
 import yaml  # type: ignore
 import asyncio
 import time
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional, Callable
 from .llm import LLMClient, MultiLLMClient
 from .metrics import calculate_security_metrics
 from .mcp_client import MCPSecurityTester, SAMPLE_MCP_TOOLS
@@ -31,16 +31,41 @@ class SecurityEvaluator:
         config_path: str = "prompts.yaml",
         llm_provider: str = "auto",
         profile: str = "default",
+        progress_callback: Optional[Callable[[Dict[str, Any]], Any]] = None,
         **llm_kwargs,
     ):
         self.config_path = config_path
         self.profile_name = profile
+        self.progress_callback = progress_callback
         self.llm_client = LLMClient(provider=llm_provider, **llm_kwargs)
         self.test_results: List[Any] = []
         self.start_time: float = 0.0
         self.end_time: float = 0.0
         self.mcp_tester = MCPSecurityTester()
         self._setup_mcp_tools()
+
+    async def _notify_progress(
+        self, message: str, step: str = "running", current: int = 0, total: int = 0
+    ):
+        """Send progress notification via callback."""
+        if self.progress_callback:
+            update = {
+                "message": message,
+                "step": step,
+                "current": current,
+                "total": total,
+                "timestamp": time.time(),
+            }
+            if asyncio.iscoroutinefunction(self.progress_callback):
+                await self.progress_callback(update)
+            else:
+                self.progress_callback(update)
+
+    async def _wrap_test(self, task, message, current, total, step):
+        """Wrap a test task to provide progress notifications."""
+        await self._notify_progress(message, step=step, current=current, total=total)
+        result = await task
+        return result
 
     def load_config(self) -> Dict[str, Any]:
         """Load test configuration from YAML file."""
@@ -212,10 +237,27 @@ class SecurityEvaluator:
                     repo_tasks.append(task)
 
         # Execute all tests concurrently
-        all_tasks = redaction_tasks + repo_tasks
-        if all_tasks:
+        total_tests = len(redaction_tasks) + len(repo_tasks) + 1
+        wrapped_tasks = []
+
+        for i, task in enumerate(redaction_tasks):
+            wrapped_tasks.append(
+                self._wrap_test(
+                    task, f"Redaction test {i+1}", i + 1, total_tests, "redaction"
+                )
+            )
+
+        for i, task in enumerate(repo_tasks):
+            idx = len(redaction_tasks) + i + 1
+            wrapped_tasks.append(
+                self._wrap_test(
+                    task, f"Repository test {i+1}", idx, total_tests, "repository"
+                )
+            )
+
+        if wrapped_tasks:
             test_results: List[Any] = await asyncio.gather(
-                *all_tasks, return_exceptions=True
+                *wrapped_tasks, return_exceptions=True
             )
 
             # Process results
@@ -235,6 +277,12 @@ class SecurityEvaluator:
 
         # Run MCP security tests
         try:
+            await self._notify_progress(
+                "Running MCP security tests",
+                step="mcp",
+                current=total_tests,
+                total=total_tests,
+            )
             results["mcp_tests"] = await self.run_mcp_security_tests()
         except Exception as e:
             results["mcp_tests"] = {"error": str(e), "test_type": "mcp_error"}
