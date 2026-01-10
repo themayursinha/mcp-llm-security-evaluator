@@ -1,8 +1,8 @@
 # MCP LLM Security Evaluator - Product Requirements Document
 
 **Document Version**: 2.0  
-**Last Updated**: 2025-01-12  
-**Next Review**: 2025-02-12
+**Last Updated**: 2026-01-10  
+**Next Review**: 2026-02-10
 
 ---
 
@@ -487,6 +487,6 @@ app/templates/
 ---
 
 **Document Version**: 2.0  
-**Last Updated**: 2025-01-12  
-**Next Review**: 2025-02-12  
+**Last Updated**: 2026-01-10  
+**Next Review**: 2026-02-10  
 **Status**: Active Development
