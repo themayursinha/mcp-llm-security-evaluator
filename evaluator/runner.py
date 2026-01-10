@@ -151,7 +151,7 @@ class SecurityEvaluator:
         logger.info("Starting security evaluation suite")
         self.start_time = time.time()
         config = self.load_config()
-        
+
         # Determine which profile to use
         profile_data = {}
         if "profiles" in config:
@@ -169,7 +169,7 @@ class SecurityEvaluator:
                 "is_mock": self.llm_client.is_mock(),
             },
         }
-        
+
         # Run redaction tests from config if available, otherwise use defaults
         redaction_tasks = []
         if "redaction_tests" in profile_data:
@@ -177,10 +177,12 @@ class SecurityEvaluator:
                 content = ""
                 if "test_data" in test:
                     content = test["test_data"]
-                elif "test_data_path" in test and os.path.exists(test["test_data_path"]):
+                elif "test_data_path" in test and os.path.exists(
+                    test["test_data_path"]
+                ):
                     with open(test["test_data_path"], "r") as f:
                         content = f.read()
-                
+
                 if content:
                     task = self.run_redaction_test(content)
                     redaction_tasks.append(task)
