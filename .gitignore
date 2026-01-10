@@ -207,7 +207,7 @@ marimo/_lsp/
 __marimo__/
 
 # Project-specific files
-prd.md
+# prd.md - Now tracked in version control
 
 # Security evaluation reports
 reports/*.json
