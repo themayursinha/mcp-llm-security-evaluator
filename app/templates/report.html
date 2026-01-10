@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block title %}Security Evaluation Report - {{ timestamp }}{% endblock %}
+
+{% block extra_nav %}
+<button class="btn btn-sm btn-outline-secondary no-print ms-2" onclick="exportToCSV()">
+    <i class="fas fa-file-csv"></i> Export CSV
+</button>
+{% endblock %}
+
+
+{% block content %}
+<div class="container-fluid px-4">
+    <h1 class="mb-4"><i class="fas fa-shield-alt"></i> Security Evaluation Report</h1>
+    <p class="text-muted">Generated on {{ timestamp }}</p>
+
+    {% include "components/summary.html" %}
+    {% include "components/charts.html" %}
+    {% include "components/recommendations.html" %}
+
+    <!-- Redaction Analysis -->
+    {% if redaction_analysis %}
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-eraser"></i> Redaction Analysis</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Test #</th>
+                            <th>Security Score</th>
+                            <th>Redaction Effectiveness</th>
+                            <th>Data Leaked</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for test in redaction_analysis %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>
+                                <span
+                                    class="badge {{ 'bg-success' if test.security_score >= 70 else 'bg-warning' if test.security_score >= 50 else 'bg-danger' }}">
+                                    {{ "%.1f"|format(test.security_score) }}
+                                </span>
+                            </td>
+                            <td>{{ "%.2f"|format(test.redaction_effectiveness * 100) }}%</td>
+                            <td>
+                                {% if test.data_leaked %}
+                                <span class="badge bg-danger">Yes</span>
+                                {% else %}
+                                <span class="badge bg-success">No</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Repository Analysis -->
+    {% if repository_analysis %}
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-folder-open"></i> Repository Analysis</h5>
+        </div>
+        <div class="card-body">
+            {% for repo in repository_analysis %}
+            <div class="mb-4">
+                <h6>{{ repo.repo_path }}</h6>
+                <div class="row">
+                    <div class="col-md-3">
+                        <strong>Total Files:</strong> {{ repo.metrics.total_files_tested }}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Files with Leakage:</strong>
+                        <span class="badge {{ 'bg-danger' if repo.metrics.files_with_leakage > 0 else 'bg-success' }}">
+                            {{ repo.metrics.files_with_leakage }}
+                        </span>
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Leakage Rate:</strong> {{ "%.2f"|format(repo.metrics.leakage_rate * 100) }}%
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Security Score:</strong>
+                        <span
+                            class="badge {{ 'bg-success' if repo.metrics.security_score >= 70 else 'bg-warning' if repo.metrics.security_score >= 50 else 'bg-danger' }}">
+                            {{ "%.1f"|format(repo.metrics.security_score) }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            {% if not loop.last %}
+            <hr>{% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- MCP Analysis -->
+    {% if mcp_analysis and 'error' not in mcp_analysis %}
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-plug"></i> MCP Security Analysis</h5>
+        </div>
+        <div class="card-body">
+            {% set mcp_summary = mcp_analysis.summary %}
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <strong>Tools Tested:</strong> {{ mcp_summary.total_tools_tested }}
+                </div>
+                <div class="col-md-3">
+                    <strong>High Risk Tools:</strong>
+                    <span class="badge bg-danger">{{ mcp_summary.high_risk_tools }}</span>
+                </div>
+                <div class="col-md-3">
+                    <strong>Medium Risk Tools:</strong>
+                    <span class="badge bg-warning">{{ mcp_summary.medium_risk_tools }}</span>
+                </div>
+                <div class="col-md-3">
+                    <strong>Privilege Escalation:</strong>
+                    {% if mcp_summary.privilege_escalation_detected %}
+                    <span class="badge bg-danger">Detected</span>
+                    {% else %}
+                    <span class="badge bg-success">Not Detected</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="mb-3">
+                <strong>MCP Security Score:</strong>
+                <span
+                    class="badge {{ 'bg-success' if mcp_summary.mcp_security_score >= 70 else 'bg-warning' if mcp_summary.mcp_security_score >= 50 else 'bg-danger' }}">
+                    {{ "%.1f"|format(mcp_summary.mcp_security_score) }}/100
+                </span>
+            </div>
+        </div>
+    </div>
+    {% elif mcp_analysis and 'error' in mcp_analysis %}
+    <div class="card">
+        <div class="card-header bg-warning">
+            <h5 class="mb-0"><i class="fas fa-exclamation-triangle"></i> MCP Analysis Error</h5>
+        </div>
+        <div class="card-body">
+            <p class="text-muted">{{ mcp_analysis.error }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- JSON Data (hidden, for programmatic access) -->
+    <div class="card no-print" style="display: none;">
+        <div class="card-body">
+            <pre id="json-data">{{ json_data|tojson(indent=2) }}</pre>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block timestamp %}{{ timestamp }}{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Make JSON data accessible
+    window.reportData = JSON.parse(document.getElementById('json-data').textContent);
+
+    // Export to CSV function
+    function exportToCSV() {
+        const data = window.reportData;
+        if (!data) return;
+
+        let csvContent = "Category,Detail,Security Score,Metric,Value,Leakage Detected\n";
+
+        // Redaction Analysis
+        if (data.redaction_analysis && Array.isArray(data.redaction_analysis)) {
+            data.redaction_analysis.forEach((test, index) => {
+                const score = test.security_score !== undefined ? test.security_score.toFixed(1) : "0.0";
+                const eff = test.redaction_effectiveness !== undefined ? (test.redaction_effectiveness * 100).toFixed(2) : "0.00";
+                const leaked = test.data_leaked ? 'Yes' : 'No';
+                csvContent += `Redaction,Test ${index + 1},${score},Effectiveness,${eff}%,${leaked}\n`;
+            });
+        }
+
+        // Repository Analysis
+        if (data.repository_analysis && Array.isArray(data.repository_analysis)) {
+            data.repository_analysis.forEach(repo => {
+                const metrics = repo.metrics || {};
+                const score = metrics.security_score !== undefined ? metrics.security_score.toFixed(1) : "0.0";
+                const leakRate = metrics.leakage_rate !== undefined ? (metrics.leakage_rate * 100).toFixed(2) : "0.00";
+                const leaked = metrics.files_with_leakage > 0 ? 'Yes' : 'No';
+                const path = repo.repo_path || "Unknown";
+                csvContent += `Repository,"${path}",${score},Leakage Rate,${leakRate}%,${leaked}\n`;
+                csvContent += `Repository,"${path}",${score},Total Files,${metrics.total_files_tested || 0},N/A\n`;
+            });
+        }
+
+        // MCP Analysis
+        if (data.mcp_analysis && data.mcp_analysis.summary) {
+            const mcp = data.mcp_analysis.summary;
+            const score = mcp.mcp_security_score !== undefined ? mcp.mcp_security_score.toFixed(1) : "0.0";
+            const esc = mcp.privilege_escalation_detected ? 'Yes' : 'No';
+            csvContent += `MCP,Overall,${score},Tools Tested,${mcp.total_tools_tested || 0},${esc}\n`;
+            csvContent += `MCP,Overall,${score},High Risk Tools,${mcp.high_risk_tools || 0},N/A\n`;
+        }
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+
+        const filename = `security_report_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '_')}.csv`;
+        link.setAttribute("download", filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+</script>
+{% endblock %}

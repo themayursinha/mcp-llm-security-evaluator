@@ -1,0 +1,40 @@
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-chart-line"></i> Executive Summary</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3 text-center mb-3">
+                <div class="score-badge {{ 'score-excellent' if overall_score >= 90 else 'score-good' if overall_score >= 70 else 'score-fair' if overall_score >= 50 else 'score-poor' }}">
+                    {{ "%.1f"|format(overall_score) }}
+                </div>
+                <div class="mt-2"><strong>Overall Security Score</strong></div>
+            </div>
+            <div class="col-md-9">
+                <div class="row">
+                    <div class="col-md-4 mb-2">
+                        <strong>Total Tests:</strong> {{ summary.get('total_tests', 0) }}
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <strong>Leakage Detected:</strong> 
+                        <span class="badge {{ 'bg-danger' if summary.get('leakage_detected', 0) > 0 else 'bg-success' }}">
+                            {{ summary.get('leakage_detected', 0) }}
+                        </span>
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <strong>Execution Time:</strong> {{ "%.2f"|format(summary.get('execution_time', 0)) }}s
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <strong>Base Security Score:</strong> {{ "%.1f"|format(summary.get('security_score', 0)) }}
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <strong>MCP Security Score:</strong> {{ "%.1f"|format(summary.get('mcp_security_score', 0)) }}
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <strong>MCP Tools Tested:</strong> {{ summary.get('mcp_tools_tested', 0) }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

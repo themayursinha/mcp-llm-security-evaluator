@@ -1,5 +1,10 @@
 import re
+import os
+import json
+from datetime import datetime
+from pathlib import Path
 from typing import Dict, Any, List, Tuple
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 def precision(tp: int, fp: int) -> float:
     """Calculate precision metric."""
@@ -171,3 +176,69 @@ def generate_security_report(evaluation_results: Dict[str, Any]) -> Dict[str, An
         report["recommendations"].append("MCP security score is low. Review tool permissions and access controls.")
     
     return report
+
+def generate_html_report(report: Dict[str, Any], output_dir: str = "reports") -> str:
+    """Generate HTML report from security report data.
+    
+    Args:
+        report: Security report dictionary from generate_security_report()
+        output_dir: Directory to save HTML report
+        
+    Returns:
+        Path to generated HTML report file
+    """
+    # Get template directory
+    template_dir = Path(__file__).parent.parent / "app" / "templates"
+    
+    # Set up Jinja2 environment
+    env = Environment(
+        loader=FileSystemLoader(str(template_dir)),
+        autoescape=select_autoescape(['html', 'xml'])
+    )
+    
+    # Prepare template data
+    summary = report.get("evaluation_summary", {})
+    overall_score = report.get("overall_security_score", 0)
+    redaction_analysis = report.get("redaction_analysis", [])
+    repository_analysis = report.get("repository_analysis", [])
+    mcp_analysis = report.get("mcp_analysis", {})
+    recommendations = report.get("recommendations", [])
+    
+    # Calculate averages for charts
+    redaction_scores = [test.get("security_score", 0) for test in redaction_analysis]
+    redaction_avg_score = sum(redaction_scores) / len(redaction_scores) if redaction_scores else 0
+    
+    repository_scores = [repo.get("metrics", {}).get("security_score", 0) for repo in repository_analysis]
+    repository_avg_score = sum(repository_scores) / len(repository_scores) if repository_scores else 0
+    
+    mcp_summary = mcp_analysis.get("summary", {}) if isinstance(mcp_analysis, dict) else {}
+    mcp_score = mcp_summary.get("mcp_security_score", 0)
+    
+    # Format timestamp
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Render template
+    template = env.get_template("report.html")
+    html_content = template.render(
+        timestamp=timestamp,
+        summary=summary,
+        overall_score=overall_score,
+        redaction_analysis=redaction_analysis,
+        repository_analysis=repository_analysis,
+        mcp_analysis=mcp_analysis,
+        recommendations=recommendations,
+        redaction_avg_score=redaction_avg_score,
+        repository_avg_score=repository_avg_score,
+        mcp_score=mcp_score,
+        json_data=report
+    )
+    
+    # Save HTML file
+    os.makedirs(output_dir, exist_ok=True)
+    timestamp_file = datetime.now().strftime("%Y%m%d_%H%M%S")
+    html_file = os.path.join(output_dir, f"security_report_{timestamp_file}.html")
+    
+    with open(html_file, 'w', encoding='utf-8') as f:
+        f.write(html_content)
+    
+    return html_file

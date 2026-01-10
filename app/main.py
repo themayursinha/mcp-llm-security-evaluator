@@ -16,7 +16,8 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from evaluator.runner import SecurityEvaluator
-from evaluator.metrics import generate_security_report
+from evaluator.metrics import generate_security_report, generate_html_report
+from app.config import Config
 
 def save_report(report: dict, output_dir: str = "reports") -> str:
     """Save security report to file."""
@@ -116,6 +117,12 @@ def main():
         default=1000,
         help="Maximum tokens for LLM responses (default: 1000)"
     )
+    parser.add_argument(
+        "--format",
+        choices=["json", "html", "both"],
+        default=Config.REPORT_FORMAT,
+        help=f"Report format: json, html, or both (default: {Config.REPORT_FORMAT})"
+    )
     
     args = parser.parse_args()
     
@@ -123,6 +130,11 @@ def main():
     print("=" * 40)
     
     try:
+        # Validate configuration
+        is_valid, error_msg = Config.validate(args.provider)
+        if not is_valid:
+            print(f"Configuration Error: {error_msg}")
+            sys.exit(1)
         # Prepare LLM configuration
         llm_kwargs = {}
         if args.model:
@@ -142,6 +154,10 @@ def main():
             print(f"Output directory: {args.output_dir}")
             print(f"LLM Provider: {evaluator.llm_client.get_provider_name()}")
             print(f"Using mock provider: {evaluator.llm_client.is_mock()}")
+            config_summary = Config.get_summary()
+            print(f"Report format: {args.format}")
+            print(f"Security threshold: {Config.SECURITY_THRESHOLD}")
+            print(f"Log level: {Config.LOG_LEVEL}")
         
         # Run evaluation
         print("Running security evaluation...")
@@ -151,17 +167,34 @@ def main():
         print("Generating security report...")
         report = generate_security_report(evaluation_results)
         
-        # Save report
-        report_file = save_report(report, args.output_dir)
-        print(f"Report saved to: {report_file}")
+        # Save reports based on format
+        report_files = []
+        if args.format in ["json", "both"]:
+            json_file = save_report(report, args.output_dir)
+            report_files.append(json_file)
+            print(f"JSON report saved to: {json_file}")
+        
+        if args.format in ["html", "both"]:
+            try:
+                html_file = generate_html_report(report, args.output_dir)
+                report_files.append(html_file)
+                print(f"HTML report saved to: {html_file}")
+            except Exception as e:
+                print(f"Warning: Failed to generate HTML report: {e}")
+                if args.format == "html":
+                    # If HTML was the only format requested, fall back to JSON
+                    json_file = save_report(report, args.output_dir)
+                    report_files.append(json_file)
+                    print(f"Fell back to JSON report: {json_file}")
         
         # Print summary
         print_summary(report)
         
         # Exit with appropriate code
         overall_score = report.get("overall_security_score", 0)
-        if overall_score < 70:
-            print(f"\n⚠️  Security score below threshold (70). Score: {overall_score:.1f}")
+        threshold = Config.SECURITY_THRESHOLD
+        if overall_score < threshold:
+            print(f"\n⚠️  Security score below threshold ({threshold}). Score: {overall_score:.1f}")
             sys.exit(1)
         else:
             print(f"\n✅ Security evaluation passed. Score: {overall_score:.1f}")

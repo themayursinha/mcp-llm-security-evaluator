@@ -211,6 +211,11 @@ __marimo__/
 
 # Security evaluation reports
 reports/*.json
+reports/*.html
+reports/*.csv
+
+# Logs
+logs/
 
 # IDE settings
 .vscode/

@@ -1,0 +1,108 @@
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-chart-pie"></i> Security Score Breakdown</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="scoreChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-chart-bar"></i> Test Results by Category</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="categoryChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Security Score Breakdown Chart
+    const scoreCtx = document.getElementById('scoreChart').getContext('2d');
+    const scoreData = {
+        labels: ['Overall Score', 'Remaining'],
+        datasets: [{
+            data: [{{ overall_score }}, {{ 100 - overall_score }}],
+            backgroundColor: [
+                '{{ "#28a745" if overall_score >= 70 else "#ffc107" if overall_score >= 50 else "#dc3545" }}',
+                '#e9ecef'
+            ]
+        }]
+    };
+    new Chart(scoreCtx, {
+        type: 'doughnut',
+        data: scoreData,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.label + ': ' + context.parsed.toFixed(1) + '/100';
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    // Category Breakdown Chart
+    const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+    const categoryData = {
+        labels: ['Redaction', 'Repository', 'MCP'],
+        datasets: [{
+            label: 'Security Score',
+            data: [
+                {{ redaction_avg_score }},
+                {{ repository_avg_score }},
+                {{ mcp_score }}
+            ],
+            backgroundColor: [
+                'rgba(40, 167, 69, 0.7)',
+                'rgba(0, 123, 255, 0.7)',
+                'rgba(255, 193, 7, 0.7)'
+            ],
+            borderColor: [
+                'rgba(40, 167, 69, 1)',
+                'rgba(0, 123, 255, 1)',
+                'rgba(255, 193, 7, 1)'
+            ],
+            borderWidth: 1
+        }]
+    };
+    new Chart(categoryCtx, {
+        type: 'bar',
+        data: categoryData,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return 'Score: ' + context.parsed.y.toFixed(1) + '/100';
+                        }
+                    }
+                }
+            }
+        }
+    });
+</script>
