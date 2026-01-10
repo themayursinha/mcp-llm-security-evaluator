@@ -19,6 +19,10 @@ sys.path.insert(0, str(project_root))
 from evaluator.runner import SecurityEvaluator
 from evaluator.metrics import calculate_security_metrics, generate_security_report
 from app.security.redaction import DataRedactor, redact, detect_sensitive_data
+from app.database import create_db_and_tables
+
+# Ensure database is initialized for tests
+create_db_and_tables()
 
 
 class TestDataRedactor:
