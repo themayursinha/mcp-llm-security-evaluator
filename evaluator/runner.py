@@ -30,9 +30,11 @@ class SecurityEvaluator:
         self,
         config_path: str = "prompts.yaml",
         llm_provider: str = "auto",
+        profile: str = "default",
         **llm_kwargs,
     ):
         self.config_path = config_path
+        self.profile_name = profile
         self.llm_client = LLMClient(provider=llm_provider, **llm_kwargs)
         self.test_results: List[Any] = []
         self.start_time: float = 0.0
@@ -149,6 +151,14 @@ class SecurityEvaluator:
         logger.info("Starting security evaluation suite")
         self.start_time = time.time()
         config = self.load_config()
+        
+        # Determine which profile to use
+        profile_data = {}
+        if "profiles" in config:
+            profile_data = config["profiles"].get(
+                self.profile_name, config["profiles"].get("default", {})
+            )
+
         results: Dict[str, Any] = {
             "redaction_tests": [],
             "repository_tests": [],
@@ -159,24 +169,45 @@ class SecurityEvaluator:
                 "is_mock": self.llm_client.is_mock(),
             },
         }
-
-        # Run redaction tests
-        test_data_files = ["data/repoA/secret.txt", "data/repoB/readme.md"]
+        
+        # Run redaction tests from config if available, otherwise use defaults
         redaction_tasks = []
-        for file_path in test_data_files:
-            if os.path.exists(file_path):
-                with open(file_path, "r") as f:
-                    content = f.read()
-                task = self.run_redaction_test(content)
-                redaction_tasks.append(task)
+        if "redaction_tests" in profile_data:
+            for test in profile_data["redaction_tests"]:
+                content = ""
+                if "test_data" in test:
+                    content = test["test_data"]
+                elif "test_data_path" in test and os.path.exists(test["test_data_path"]):
+                    with open(test["test_data_path"], "r") as f:
+                        content = f.read()
+                
+                if content:
+                    task = self.run_redaction_test(content)
+                    redaction_tasks.append(task)
+        else:
+            # Fallback for backward compatibility
+            test_data_files = ["data/repoA/secret.txt", "data/repoB/readme.md"]
+            for file_path in test_data_files:
+                if os.path.exists(file_path):
+                    with open(file_path, "r") as f:
+                        content = f.read()
+                    task = self.run_redaction_test(content)
+                    redaction_tasks.append(task)
 
         # Run repository tests
-        repo_paths = ["data/repoA", "data/repoB"]
         repo_tasks = []
-        for repo_path in repo_paths:
-            if os.path.exists(repo_path):
-                task = self.run_repository_test(repo_path)
-                repo_tasks.append(task)
+        if "repository_tests" in profile_data:
+            for test in profile_data["repository_tests"]:
+                repo_path = test.get("path")
+                if repo_path and os.path.exists(repo_path):
+                    task = self.run_repository_test(repo_path)
+                    repo_tasks.append(task)
+        else:
+            repo_paths = ["data/repoA", "data/repoB"]
+            for repo_path in repo_paths:
+                if os.path.exists(repo_path):
+                    task = self.run_repository_test(repo_path)
+                    repo_tasks.append(task)
 
         # Execute all tests concurrently
         all_tasks = redaction_tasks + repo_tasks

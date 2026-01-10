@@ -126,7 +126,7 @@ class TestSecurityEvaluator:
         if isinstance(config, list):
             assert len(config) > 0
         else:
-            assert "prompts" in config
+            assert "profiles" in config or "prompts" in config
 
     def test_load_config_file(self):
         """Test loading configuration from file."""

@@ -113,7 +113,12 @@ def main():
     parser.add_argument(
         "--quick",
         action="store_true",
-        help="Run quick evaluation (skip repository tests)",
+        help="Run quick evaluation (skip repository tests, use 'quick' profile)",
+    )
+    parser.add_argument(
+        "--profile",
+        default="default",
+        help="Configuration profile to use (default: default)",
     )
     parser.add_argument(
         "--provider",
@@ -155,9 +160,17 @@ def main():
         if args.max_tokens:
             llm_kwargs["max_tokens"] = args.max_tokens
 
+        # Determine profile
+        profile = args.profile
+        if args.quick:
+            profile = "quick"
+
         # Initialize evaluator
         evaluator = SecurityEvaluator(
-            config_path=args.config, llm_provider=args.provider, **llm_kwargs
+            config_path=args.config,
+            llm_provider=args.provider,
+            profile=profile,
+            **llm_kwargs,
         )
 
         if args.verbose:
