@@ -123,7 +123,7 @@ def main():
     parser.add_argument(
         "--provider",
         default="auto",
-        choices=["auto", "openai", "anthropic", "mock"],
+        choices=["auto", "openai", "anthropic", "ollama", "mock"],
         help="LLM provider to use (default: auto)",
     )
     parser.add_argument(
@@ -134,6 +134,12 @@ def main():
         type=int,
         default=1000,
         help="Maximum tokens for LLM responses (default: 1000)",
+    )
+    parser.add_argument(
+        "--base-url", help="Base URL for local LLM providers (e.g., for Ollama)"
+    )
+    parser.add_argument(
+        "--no-cache", action="store_true", help="Disable LLM response caching"
     )
     parser.add_argument(
         "--format",
@@ -170,12 +176,15 @@ def main():
         if not is_valid:
             logger.error(f"Configuration Error: {error_msg}")
             sys.exit(1)
-        # Prepare LLM configuration
         llm_kwargs = {}
         if args.model:
             llm_kwargs["model"] = args.model
         if args.max_tokens:
             llm_kwargs["max_tokens"] = args.max_tokens
+        if args.base_url:
+            llm_kwargs["base_url"] = args.base_url
+        if args.no_cache:
+            llm_kwargs["use_cache"] = False
 
         # Determine profile
         profile = args.profile

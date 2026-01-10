@@ -98,9 +98,11 @@ python -m app.main [OPTIONS]
 | `--format` | Report format: `json`, `html`, or `both` (default: `both`). |
 | `--quick` | Skip repository walkthroughs and only run redaction exercises. |
 | `--verbose` / `-v` | Print additional diagnostics while the suite runs. |
-| `--provider` | LLM provider: `auto`, `openai`, `anthropic`, or `mock` (default: `auto`). |
+| `--provider` | LLM provider: `auto`, `openai`, `anthropic`, `ollama`, or `mock` (default: `auto`). |
 | `--model` | Specific model to use (e.g., `gpt-4`, `claude-3-sonnet`). |
 | `--max-tokens` | Maximum tokens for LLM responses (default: 1000). |
+| `--base-url` | Base URL for local LLM providers (e.g., for `ollama`). |
+| `--no-cache` | Disable persistent LLM response caching. |
 | `--server` | Start the REST API server for remote execution and history. |
 | `--host` | API server host (default: 127.0.0.1). |
 | `--port` | API server port (default: 8000). |
@@ -165,12 +167,13 @@ See `.github/workflows/ci.yml` for details.
 - Enhanced logging and observability
 - Expanded configuration management with profile support
 
-**Phase 3: Advanced Features** 🚧 **In Progress**
+**Phase 3: Advanced Features** ✅ **Completed**
 - REST API for programmatic access and history tracking
 - SQLite persistence for evaluation reports
 - Historical trend analysis
-- WebSocket support and real-time dashboard (Planned)
-- Persistent caching for LLM responses (Planned)
+- Real-time monitoring dashboard with WebSockets
+- Persistent LLM response caching (Performance & Scale)
+- Local Model support via Ollama (Air-gapped security)
 
 See [`prd.md`](prd.md) for detailed requirements and implementation status.
 

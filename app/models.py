@@ -19,3 +19,15 @@ class EvaluationReport(SQLModel, table=True):
 
     class Config:
         arbitrary_types_allowed = True
+
+
+class LLMCache(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    cache_key: str = Field(index=True, unique=True)
+    prompt_hash: str = Field(index=True)
+    provider: str
+    model: str
+    prompt: str
+    response: str
+    parameters: Dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    timestamp: datetime = Field(default_factory=datetime.utcnow)

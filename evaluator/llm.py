@@ -20,6 +20,15 @@ try:
 except ImportError:
     ANTHROPIC_AVAILABLE = False
 
+try:
+    import httpx
+
+    HTTPX_AVAILABLE = True
+except ImportError:
+    HTTPX_AVAILABLE = False
+
+from app.database import get_cached_response, save_to_cache
+
 logger = get_logger(__name__)
 
 
@@ -136,6 +145,45 @@ class AnthropicProvider(LLMProvider):
         return f"anthropic-{self.model}"
 
 
+class OllamaProvider(LLMProvider):
+    """Local Ollama API provider."""
+
+    def __init__(self, base_url: str = "http://localhost:11434", model: str = "llama3"):
+        if not HTTPX_AVAILABLE:
+            raise ImportError(
+                "httpx package not available. Install with: pip install httpx"
+            )
+
+        self.base_url = base_url
+        self.model = model
+        self.timeout = 60.0
+
+    async def generate(self, prompt: str, **kwargs) -> str:
+        """Generate a response using Ollama API."""
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.base_url}/api/generate",
+                    json={
+                        "model": self.model,
+                        "prompt": prompt,
+                        "stream": False,
+                        "options": {
+                            "temperature": kwargs.get("temperature", 0.7),
+                            "num_predict": kwargs.get("max_tokens", 1000),
+                        },
+                    },
+                )
+                response.raise_for_status()
+                return response.json().get("response", "")
+        except Exception as e:
+            logger.error(f"Ollama API request failed: {e}")
+            raise
+
+    def get_provider_name(self) -> str:
+        return f"ollama-{self.model}"
+
+
 class LLMClient:
     """Enhanced LLM client with multiple provider support."""
 
@@ -160,16 +208,34 @@ class LLMClient:
             self._provider = OpenAIProvider(**self.kwargs)
         elif self.provider_name == "anthropic":
             self._provider = AnthropicProvider(**self.kwargs)
+        elif self.provider_name == "ollama":
+            self._provider = OllamaProvider(**self.kwargs)
         elif self.provider_name == "mock":
             self._provider = MockLLMProvider(**self.kwargs)
         else:
             raise ValueError(f"Unknown provider: {self.provider_name}")
 
     async def generate(self, prompt: str, **kwargs) -> str:
-        """Generate a response from the LLM."""
+        """Generate a response from the LLM with optional caching."""
         if self._provider is None:
             raise RuntimeError("Provider not initialized")
-        return await self._provider.generate(prompt, **kwargs)
+
+        use_cache = kwargs.get("use_cache", True)
+        provider_name = self.get_provider_name()
+        model_name = getattr(self._provider, "model", "default")
+
+        if use_cache:
+            cached = get_cached_response(provider_name, model_name, prompt, kwargs)
+            if cached:
+                logger.debug(f"Cache hit for {provider_name}")
+                return cached
+
+        response = await self._provider.generate(prompt, **kwargs)
+
+        if use_cache and response:
+            save_to_cache(provider_name, model_name, prompt, response, kwargs)
+
+        return response
 
     def generate_sync(self, prompt: str, **kwargs) -> str:
         """Synchronous wrapper for generate method."""

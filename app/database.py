@@ -1,6 +1,9 @@
 import os
-from sqlmodel import SQLModel, create_engine, Session
-from .models import EvaluationReport
+from typing import Optional
+from sqlmodel import SQLModel, create_engine, Session, select
+from .models import EvaluationReport, LLMCache
+import hashlib
+import json
 
 # Ensure the data directory exists
 os.makedirs("data", exist_ok=True)
@@ -13,6 +16,56 @@ engine = create_engine(sqlite_url, echo=False)
 
 def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
+
+
+def generate_cache_key(provider: str, model: str, prompt: str, parameters: dict) -> str:
+    """Generate a unique cache key for a prompt and its parameters."""
+    param_str = json.dumps(parameters, sort_keys=True)
+    raw_key = f"{provider}:{model}:{prompt}:{param_str}"
+    return hashlib.sha256(raw_key.encode()).hexdigest()
+
+
+def get_cached_response(
+    provider: str, model: str, prompt: str, parameters: dict
+) -> Optional[str]:
+    """Retrieve a cached response if available."""
+    cache_key = generate_cache_key(provider, model, prompt, parameters)
+    with Session(engine) as session:
+        statement = select(LLMCache).where(LLMCache.cache_key == cache_key)
+        result = session.exec(statement).first()
+        if result:
+            return result.response
+        return None
+
+
+def save_to_cache(
+    provider: str, model: str, prompt: str, response: str, parameters: dict
+):
+    """Save a response to the cache."""
+    cache_key = generate_cache_key(provider, model, prompt, parameters)
+    prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
+
+    cache_entry = LLMCache(
+        cache_key=cache_key,
+        prompt_hash=prompt_hash,
+        provider=provider,
+        model=model,
+        prompt=prompt,
+        response=response,
+        parameters=parameters,
+    )
+
+    with Session(engine) as session:
+        try:
+            # Check if it already exists to avoid unique constraint error
+            statement = select(LLMCache).where(LLMCache.cache_key == cache_key)
+            existing = session.exec(statement).first()
+            if not existing:
+                session.add(cache_entry)
+                session.commit()
+        except Exception:
+            # If concurrent write happens, just ignore
+            session.rollback()
 
 
 def get_session():

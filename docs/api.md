@@ -67,5 +67,23 @@ Retrieve the full JSON report for a specific evaluation.
 Get historical security score trends for analysis.
 - **Example**: `curl http://localhost:8000/trends`
 
+#### `GET /monitor` (Web UI)
+Access the live security monitoring dashboard with real-time event updates.
+
+#### `WS /ws/events`
+WebSocket endpoint for real-time evaluation status and progress updates.
+
 #### `GET /health`
 API health check.
+
+## Performance and Scale Features
+
+### LLM Response Caching
+By default, the evaluator caches LLM responses in the SQLite database (`data/evaluator_history.db`). This significantly speeds up repeated evaluations and reduces API costs.
+- Disable via CLI: `--no-cache`
+- Programmatic: Pass `use_cache=False` to `generate()`
+
+### Local Model Support
+Support for **Ollama** allows for 100% local, air-gapped security evaluations.
+- Start Ollama server locally.
+- Run with: `--provider ollama --model llama3 --base-url http://localhost:11434`
