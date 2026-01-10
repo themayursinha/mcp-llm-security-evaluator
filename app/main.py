@@ -18,6 +18,9 @@ sys.path.insert(0, str(project_root))
 from evaluator.runner import SecurityEvaluator
 from evaluator.metrics import generate_security_report, generate_html_report
 from app.config import Config
+from app.logging_config import setup_logging, get_logger
+
+logger = get_logger(__name__)
 
 def save_report(report: dict, output_dir: str = "reports") -> str:
     """Save security report to file."""
@@ -126,14 +129,14 @@ def main():
     
     args = parser.parse_args()
     
-    print("MCP LLM Security Evaluator")
-    print("=" * 40)
+    # Initialize logging
+    setup_logging()
     
     try:
         # Validate configuration
         is_valid, error_msg = Config.validate(args.provider)
         if not is_valid:
-            print(f"Configuration Error: {error_msg}")
+            logger.error(f"Configuration Error: {error_msg}")
             sys.exit(1)
         # Prepare LLM configuration
         llm_kwargs = {}

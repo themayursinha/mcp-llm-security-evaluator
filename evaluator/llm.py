@@ -3,7 +3,7 @@ import asyncio
 import time
 from typing import Dict, Any, Optional, List
 from abc import ABC, abstractmethod
-import logging
+from app.logging_config import get_logger
 
 # Optional imports for LLM providers
 try:
@@ -18,7 +18,7 @@ try:
 except ImportError:
     ANTHROPIC_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class LLMProvider(ABC):
     """Abstract base class for LLM providers."""

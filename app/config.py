@@ -38,35 +38,9 @@ class Config:
     
     @classmethod
     def validate(cls, provider: str = "auto") -> tuple:
-        """Validate configuration based on selected provider.
-        
-        Args:
-            provider: LLM provider name (auto, openai, anthropic, mock)
-            
-        Returns:
-            Tuple of (is_valid, error_message)
-        """
-        if provider == "openai" and not cls.OPENAI_API_KEY:
-            return False, "OPENAI_API_KEY is required when using OpenAI provider"
-        
-        if provider == "anthropic" and not cls.ANTHROPIC_API_KEY:
-            return False, "ANTHROPIC_API_KEY is required when using Anthropic provider"
-        
-        if provider == "auto":
-            if not cls.OPENAI_API_KEY and not cls.ANTHROPIC_API_KEY:
-                # This is OK - will fall back to mock
-                pass
-        
-        if cls.REPORT_FORMAT not in ["json", "html", "both"]:
-            return False, f"REPORT_FORMAT must be 'json', 'html', or 'both', got '{cls.REPORT_FORMAT}'"
-        
-        if not (0 <= cls.SECURITY_THRESHOLD <= 100):
-            return False, f"SECURITY_THRESHOLD must be between 0 and 100, got {cls.SECURITY_THRESHOLD}"
-        
-        if cls.LOG_LEVEL not in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
-            return False, f"LOG_LEVEL must be one of: DEBUG, INFO, WARNING, ERROR, CRITICAL, got '{cls.LOG_LEVEL}'"
-        
-        return True, None
+        """Validate configuration based on selected provider."""
+        from app.config_validator import ConfigValidator
+        return ConfigValidator.validate(provider)
     
     @classmethod
     def get_summary(cls) -> dict:

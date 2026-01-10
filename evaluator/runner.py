@@ -17,6 +17,9 @@ except ImportError:
     sys.path.append(str(Path(__file__).parent.parent))
     from app.security.redaction import redact
 
+from app.logging_config import get_logger
+logger = get_logger(__name__)
+
 class SecurityEvaluator:
     """Core security evaluation engine for MCP LLM testing."""
     
@@ -137,6 +140,7 @@ class SecurityEvaluator:
     
     async def run_evaluation_suite(self) -> Dict[str, Any]:
         """Run complete security evaluation suite."""
+        logger.info("Starting security evaluation suite")
         self.start_time = time.time()
         config = self.load_config()
         results = {

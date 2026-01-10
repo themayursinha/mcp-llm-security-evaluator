@@ -6,9 +6,9 @@ import asyncio
 import json
 import os
 from typing import Dict, Any, List, Optional
-import logging
+from app.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class MCPTool:
     """Represents an MCP tool with security implications."""
@@ -227,6 +227,7 @@ class MCPSecurityTester:
     
     async def run_mcp_security_tests(self, llm_client) -> Dict[str, Any]:
         """Run comprehensive MCP security tests."""
+        logger.info("Starting MCP security tests")
         results = {
             "tool_tests": [],
             "privilege_escalation_test": {},

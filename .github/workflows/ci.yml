@@ -1,14 +1,69 @@
-name: CI
-on: [push, pull_request]
+name: MCP LLM Security Evaluator CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
 jobs:
-  test:
+  quality-and-test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
         with:
-          python-version: 3.11
-      - name: Install deps
-        run: pip install -r requirements.txt
-      - name: Run tests
-        run: pytest -q
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest-cov
+
+      - name: Lint with flake8
+        run: |
+          # stop the build if there are Python syntax errors or undefined names
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          # exit-zero treats all errors as warnings
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Check formatting with black
+        run: |
+          black --check .
+
+      - name: Type check with mypy
+        run: |
+          mypy app evaluator --ignore-missing-imports
+
+      - name: Run tests with coverage
+        run: |
+          pytest --cov=app --cov=evaluator --cov-report=xml tests/
+
+      - name: Generate HTML security report (Smoke test)
+        run: |
+          # Use mock provider to avoid external API calls in CI
+          python -m app.main --quick --format html --provider mock
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload test artifacts (HTML reports)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-reports-python-${{ matrix.python-version }}
+          path: reports/*.html
+          retention-days: 7

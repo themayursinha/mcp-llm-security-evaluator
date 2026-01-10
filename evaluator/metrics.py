@@ -5,6 +5,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 def precision(tp: int, fp: int) -> float:
     """Calculate precision metric."""
@@ -187,6 +190,7 @@ def generate_html_report(report: Dict[str, Any], output_dir: str = "reports") ->
     Returns:
         Path to generated HTML report file
     """
+    logger.info(f"Generating HTML report in {output_dir}")
     # Get template directory
     template_dir = Path(__file__).parent.parent / "app" / "templates"
     
