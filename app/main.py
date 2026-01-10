@@ -40,6 +40,7 @@ def print_summary(report: dict):
     print(f"Total Tests: {summary.get('total_tests', 0)}")
     print(f"Data Leakage Detected: {summary.get('leakage_detected', 0)}")
     print(f"Security Score: {summary.get('security_score', 0):.1f}/100")
+    print(f"Execution Time: {summary.get('execution_time', 0):.2f}s")
     
     print("\nRedaction Analysis:")
     for i, analysis in enumerate(report.get("redaction_analysis", []), 1):
@@ -52,6 +53,17 @@ def print_summary(report: dict):
         print(f"  {analysis.get('repo_path', 'Unknown')}: "
               f"Score {metrics.get('security_score', 0):.1f}, "
               f"Leakage Rate {metrics.get('leakage_rate', 0):.2f}")
+    
+    print("\nMCP Security Analysis:")
+    mcp_analysis = report.get("mcp_analysis", {})
+    if "error" in mcp_analysis:
+        print(f"  Error: {mcp_analysis['error']}")
+    else:
+        mcp_summary = mcp_analysis.get("summary", {})
+        print(f"  Tools Tested: {mcp_summary.get('total_tools_tested', 0)}")
+        print(f"  High Risk Tools: {mcp_summary.get('high_risk_tools', 0)}")
+        print(f"  Privilege Escalation: {'Yes' if mcp_summary.get('privilege_escalation_detected', False) else 'No'}")
+        print(f"  MCP Security Score: {mcp_summary.get('mcp_security_score', 0):.1f}/100")
     
     print(f"\nOverall Security Score: {report.get('overall_security_score', 0):.1f}/100")
     
@@ -88,6 +100,22 @@ def main():
         action="store_true",
         help="Run quick evaluation (skip repository tests)"
     )
+    parser.add_argument(
+        "--provider",
+        default="auto",
+        choices=["auto", "openai", "anthropic", "mock"],
+        help="LLM provider to use (default: auto)"
+    )
+    parser.add_argument(
+        "--model",
+        help="Specific model to use (e.g., gpt-4, claude-3-sonnet)"
+    )
+    parser.add_argument(
+        "--max-tokens",
+        type=int,
+        default=1000,
+        help="Maximum tokens for LLM responses (default: 1000)"
+    )
     
     args = parser.parse_args()
     
@@ -95,16 +123,29 @@ def main():
     print("=" * 40)
     
     try:
+        # Prepare LLM configuration
+        llm_kwargs = {}
+        if args.model:
+            llm_kwargs["model"] = args.model
+        if args.max_tokens:
+            llm_kwargs["max_tokens"] = args.max_tokens
+        
         # Initialize evaluator
-        evaluator = SecurityEvaluator(config_path=args.config)
+        evaluator = SecurityEvaluator(
+            config_path=args.config,
+            llm_provider=args.provider,
+            **llm_kwargs
+        )
         
         if args.verbose:
             print(f"Configuration loaded from: {args.config}")
             print(f"Output directory: {args.output_dir}")
+            print(f"LLM Provider: {evaluator.llm_client.get_provider_name()}")
+            print(f"Using mock provider: {evaluator.llm_client.is_mock()}")
         
         # Run evaluation
         print("Running security evaluation...")
-        evaluation_results = evaluator.run_evaluation_suite()
+        evaluation_results = evaluator.run_evaluation_suite_sync()
         
         # Generate comprehensive report
         print("Generating security report...")
