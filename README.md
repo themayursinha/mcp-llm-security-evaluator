@@ -101,6 +101,10 @@ python -m app.main [OPTIONS]
 | `--provider` | LLM provider: `auto`, `openai`, `anthropic`, or `mock` (default: `auto`). |
 | `--model` | Specific model to use (e.g., `gpt-4`, `claude-3-sonnet`). |
 | `--max-tokens` | Maximum tokens for LLM responses (default: 1000). |
+| `--server` | Start the REST API server for remote execution and history. |
+| `--host` | API server host (default: 127.0.0.1). |
+| `--port` | API server port (default: 8000). |
+| `--profile` | Configuration profile to use (default: `default`). |
 
 Example quick run:
 ```bash
@@ -154,12 +158,19 @@ See `.github/workflows/ci.yml` for details.
 - Multiple LLM provider support (OpenAI, Anthropic, Mock)
 - Comprehensive test suite
 
-**Phase 2: Production Readiness Enhancements** 🚧 **In Progress**
+**Phase 2: Production Readiness Enhancements** ✅ **Completed**
 - HTML report generation with interactive visualizations
 - Environment variable configuration
 - CI/CD integration
 - Enhanced logging and observability
-- Expanded configuration management
+- Expanded configuration management with profile support
+
+**Phase 3: Advanced Features** 🚧 **In Progress**
+- REST API for programmatic access and history tracking
+- SQLite persistence for evaluation reports
+- Historical trend analysis
+- WebSocket support and real-time dashboard (Planned)
+- Persistent caching for LLM responses (Planned)
 
 See [`prd.md`](prd.md) for detailed requirements and implementation status.
 

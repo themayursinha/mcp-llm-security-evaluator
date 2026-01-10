@@ -141,11 +141,28 @@ def main():
         default=Config.REPORT_FORMAT,
         help=f"Report format: json, html, or both (default: {Config.REPORT_FORMAT})",
     )
+    parser.add_argument(
+        "--server", action="store_true", help="Start the REST API server"
+    )
+    parser.add_argument(
+        "--host", default="127.0.0.1", help="API server host (default: 127.0.0.1)"
+    )
+    parser.add_argument(
+        "--port", type=int, default=8000, help="API server port (default: 8000)"
+    )
 
     args = parser.parse_args()
 
     # Initialize logging
     setup_logging()
+
+    if args.server:
+        import uvicorn
+        from app.api import app
+
+        logger.info(f"Starting API server on {args.host}:{args.port}")
+        uvicorn.run(app, host=args.host, port=args.port)
+        return
 
     try:
         # Validate configuration
@@ -210,6 +227,16 @@ def main():
                     json_file = save_report(report, args.output_dir)
                     report_files.append(json_file)
                     print(f"Fell back to JSON report: {json_file}")
+
+        # Also save to database for historical tracking
+        try:
+            from app.database import create_db_and_tables, save_report_to_db
+
+            create_db_and_tables()
+            save_report_to_db(report)
+            print("Report also saved to historical database")
+        except Exception as e:
+            print(f"Warning: Failed to save report to database: {e}")
 
         # Print summary
         print_summary(report)

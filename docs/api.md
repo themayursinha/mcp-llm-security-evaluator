@@ -38,3 +38,34 @@ Redacts sensitive information from the given text.
 - `text`: Input string.
 - `custom_patterns`: Optional dictionary of replacement regexes.
 - **Returns**: `str` redacted text.
+## REST API
+
+The evaluator includes a FastAPI-based REST API for remote execution and history tracking.
+
+### Starting the Server
+```bash
+python -m app.main --server --port 8000
+```
+
+### Endpoints
+
+#### `POST /evaluate`
+Trigger a new security evaluation in the background.
+- **Parameters**: `profile`, `provider`, `model` (optional).
+- **Example**: `curl -X POST "http://localhost:8000/evaluate?profile=quick&provider=mock"`
+
+#### `GET /reports`
+List all historical evaluation reports (summary only).
+- **Parameters**: `offset`, `limit` (optional).
+- **Example**: `curl http://localhost:8000/reports`
+
+#### `GET /reports/{report_id}`
+Retrieve the full JSON report for a specific evaluation.
+- **Example**: `curl http://localhost:8000/reports/1`
+
+#### `GET /trends`
+Get historical security score trends for analysis.
+- **Example**: `curl http://localhost:8000/trends`
+
+#### `GET /health`
+API health check.
