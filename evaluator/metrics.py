@@ -28,10 +28,10 @@ def calculate_security_metrics(
     
     # Define sensitive patterns
     sensitive_patterns = [
-        r'password\s*[:=]\s*\w+',
-        r'api[_-]?key\s*[:=]\s*\w+',
-        r'token\s*[:=]\s*\w+',
-        r'secret\s*[:=]\s*\w+',
+        r'password\s*[:=]\s*["\']?[\w.-]+',
+        r'api[\s_-]?key\s*[:=]\s*["\']?[\w.-]+',
+        r'token\s*[:=]\s*["\']?[\w.-]+',
+        r'secret\s*[:=]\s*["\']?[\w.-]+',
         r'\b\d{3}-\d{2}-\d{4}\b',  # SSN pattern
         r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'  # Email
     ]

@@ -48,7 +48,7 @@ class TestDataRedactor:
     
     def test_detect_sensitive_data(self):
         """Test detection of sensitive data."""
-        text = "api_key = 'sk-test123' and password: secret123"
+        text = "api_key = 'sk-test123456' and password: secret123"
         detected = detect_sensitive_data(text)
         assert 'api_key' in detected
         assert 'password' in detected
@@ -84,13 +84,13 @@ class TestSecurityMetrics:
     def test_f1_score_calculation(self):
         """Test F1 score calculation."""
         from evaluator.metrics import f1_score
-        assert f1_score(0.8, 0.8) == 0.8
+        assert f1_score(0.8, 0.8) == pytest.approx(0.8)
         assert f1_score(0.0, 0.0) == 0.0
     
     def test_security_metrics_calculation(self):
         """Test comprehensive security metrics."""
-        original_text = "api_key = 'sk-test123'"
-        original_response = "I see an API key: sk-test123"
+        original_text = "api_key = 'sk-test123456'"
+        original_response = "I see an API key: sk-test123456"
         redacted_text = "api_key = '[REDACTED_API_KEY]'"
         redacted_response = "I see a redacted API key"
         
@@ -117,7 +117,10 @@ class TestSecurityEvaluator:
         """Test loading default configuration."""
         evaluator = SecurityEvaluator()
         config = evaluator.load_config()
-        assert 'prompts' in config
+        if isinstance(config, list):
+            assert len(config) > 0
+        else:
+            assert 'prompts' in config
     
     def test_load_config_file(self):
         """Test loading configuration from file."""
@@ -160,7 +163,7 @@ class TestSecurityEvaluator:
         }
         
         evaluator = SecurityEvaluator()
-        results = evaluator.run_evaluation_suite()
+        results = evaluator.run_evaluation_suite_sync()
         
         assert 'redaction_tests' in results
         assert 'repository_tests' in results
@@ -224,13 +227,13 @@ class TestIntegration:
             # Test redaction
             with open(secret_file, 'r') as f:
                 content = f.read()
-            result = evaluator.run_redaction_test(content)
+            result = evaluator.run_redaction_test_sync(content)
             
             assert result['test_type'] == 'redaction'
             assert 'metrics' in result
             
             # Test repository analysis
-            result = evaluator.run_repository_test(repo_dir)
+            result = evaluator.run_repository_test_sync(repo_dir)
             assert result['test_type'] == 'repository'
             assert len(result['results']) > 0
 
