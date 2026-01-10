@@ -219,3 +219,7 @@ logs/
 
 # IDE settings
 .vscode/
+
+# Databases
+data/*.db
+data/*.db-journal
