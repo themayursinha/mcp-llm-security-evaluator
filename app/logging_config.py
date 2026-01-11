@@ -14,6 +14,7 @@ def setup_logging():
     if log_dir and not os.path.exists(log_dir):
         os.makedirs(log_dir, exist_ok=True)
 
+
 # Filter patterns for redaction (consistent with the app's redactor)
 SENSITIVE_PATTERNS = [
     r"(?i)api[_-]?key\s*[:=]\s*['\"]?[a-zA-Z0-9_-]{10,}['\"]?",
@@ -22,14 +23,18 @@ SENSITIVE_PATTERNS = [
     r"(?i)secret\s*[:=]\s*['\"]?[a-zA-Z0-9._-]{10,}['\"]?",
 ]
 
+
 class RedactingFormatter(logging.Formatter):
     """Custom formatter that redacts sensitive patterns from log messages."""
+
     def format(self, record):
         import re
+
         message = super().format(record)
         for pattern in SENSITIVE_PATTERNS:
             message = re.sub(pattern, "[REDACTED]", message)
         return message
+
 
 def setup_logging():
     """Setup structured logging for the application."""

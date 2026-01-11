@@ -57,7 +57,7 @@ def save_to_cache(
     try:
         redacted_params = json.loads(redact(param_str))
     except Exception:
-        redacted_params = parameters # Fallback
+        redacted_params = parameters  # Fallback
 
     cache_entry = LLMCache(
         cache_key=cache_key,
@@ -97,7 +97,7 @@ def save_report_to_db(report: dict):
     try:
         report_json = json.loads(redacted_report)
     except Exception:
-        report_json = report # Fallback if json load fails after redaction
+        report_json = report  # Fallback if json load fails after redaction
 
     db_report = EvaluationReport(
         overall_security_score=summary.get("overall_security_score", 0.0),

@@ -36,6 +36,7 @@ API_KEY_NAME = "X-API-Key"
 API_KEY = os.getenv("API_KEY", "mcp-security-eval-2024")  # Default for demo
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
+
 # Pydantic models for validation
 class EvaluateRequest(BaseModel):
     profile: str = Field("default", min_length=1, max_length=50)
@@ -47,6 +48,7 @@ class EvaluateRequest(BaseModel):
         if not v.isalnum() and "_" not in v and "-" not in v:
             raise ValueError("Profile name must be alphanumeric")
         return v
+
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -62,8 +64,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
         return response
+
 
 app = FastAPI(
     title="MCP LLM Security Evaluator API",
@@ -80,6 +85,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 async def get_api_key(api_key: str = Depends(api_key_header)):
     if not api_key or api_key != API_KEY:
         raise HTTPException(
@@ -87,6 +93,7 @@ async def get_api_key(api_key: str = Depends(api_key_header)):
             detail="Could not validate credentials",
         )
     return api_key
+
 
 # Setup templates
 template_dir = Path(__file__).parent / "templates"

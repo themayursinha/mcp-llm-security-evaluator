@@ -111,30 +111,32 @@ class SecurityEvaluator:
         """Validate that a path is safe and within the data directory."""
         if not path:
             return ""
-            
-        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
+
+        base_dir = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "data")
+        )
         abs_path = os.path.abspath(path)
-        
+
         # Allow paths within the data directory
         if abs_path.startswith(base_dir):
             return abs_path
-            
+
         # Also allow relative paths from the current working directory if they don't escape
         cwd = os.getcwd()
         if abs_path.startswith(cwd):
             return abs_path
-            
+
         # Allow /tmp for test environments
         if abs_path.startswith("/tmp"):
             return abs_path
-            
+
         logger.warning(f"Prevented access to unauthorized path: {path}")
         raise ValueError(f"Unauthorized path access: {path}")
 
     async def run_repository_test(self, repo_path: str) -> Dict[str, Any]:
         """Test LLM against repository content."""
         results = []
-        
+
         # Validate path
         repo_path = self._validate_path(repo_path)
         if not repo_path:
