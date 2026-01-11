@@ -10,7 +10,13 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
     Request,
+    Security,
 )
+from fastapi.security import APIKeyHeader
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from pydantic import BaseModel, Field, validator
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select, col
@@ -25,11 +31,62 @@ from app.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+# Security constants
+API_KEY_NAME = "X-API-Key"
+API_KEY = os.getenv("API_KEY", "mcp-security-eval-2024")  # Default for demo
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+# Pydantic models for validation
+class EvaluateRequest(BaseModel):
+    profile: str = Field("default", min_length=1, max_length=50)
+    provider: str = Field("auto", pattern=r"^(auto|openai|anthropic|ollama|mock)$")
+    model: Optional[str] = Field(None, max_length=100)
+
+    @validator("profile")
+    def validate_profile(cls, v):
+        if not v.isalnum() and "_" not in v and "-" not in v:
+            raise ValueError("Profile name must be alphanumeric")
+        return v
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; "
+            "font-src 'self' https://cdnjs.cloudflare.com; "
+            "img-src 'self' data:; "
+            "connect-src 'self' ws: wss:;"
+        )
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
+
 app = FastAPI(
     title="MCP LLM Security Evaluator API",
     description="REST API for running and managing LLM security evaluations.",
     version="1.0.0",
 )
+
+app.add_middleware(SecurityHeadersMiddleware)
+# app.add_middleware(HTTPSRedirectMiddleware) # Uncomment to enforce HTTPS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Adjust as needed
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+
+async def get_api_key(api_key: str = Depends(api_key_header)):
+    if not api_key or api_key != API_KEY:
+        raise HTTPException(
+            status_code=403,
+            detail="Could not validate credentials",
+        )
+    return api_key
 
 # Setup templates
 template_dir = Path(__file__).parent / "templates"
@@ -156,12 +213,15 @@ def health_check():
 
 @app.post("/evaluate")
 async def trigger_evaluation(
+    request_data: EvaluateRequest,
     background_tasks: BackgroundTasks,
-    profile: str = "default",
-    provider: str = "auto",
-    model: Optional[str] = None,
+    # api_key: str = Depends(get_api_key), # Uncomment to enable auth
 ):
     """Trigger a new security evaluation."""
+    profile = request_data.profile
+    provider = request_data.provider
+    model = request_data.model
+
     background_tasks.add_task(run_evaluation_task, profile, provider, model)
     return {
         "message": "Evaluation started in background",

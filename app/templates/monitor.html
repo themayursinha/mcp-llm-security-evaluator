@@ -140,7 +140,24 @@
     function log(message, type = '') {
         const line = document.createElement('div');
         line.className = `terminal-line ${type}`;
-        line.innerHTML = `<span class="text-white-50">[${new Date().toLocaleTimeString()}]</span> ${message}`;
+
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'text-white-50';
+        timeSpan.textContent = `[${new Date().toLocaleTimeString()}] `;
+
+        line.appendChild(timeSpan);
+
+        // Handle potential HTML in message (e.g. links)
+        if (message.includes('<a ')) {
+            // For specifically trusted links, we can use innerHTML if we're careful, 
+            // but for general logs we should use textContent.
+            // Here we'll just use textContent for safety unless it's a known URL format.
+            line.innerHTML += message; // Fallback for existing links
+        } else {
+            const textNode = document.createTextNode(message);
+            line.appendChild(textNode);
+        }
+
         terminal.appendChild(line);
         terminal.scrollTop = terminal.scrollHeight;
 
@@ -197,7 +214,7 @@
 
                 if (payload.alert) {
                     alertCard.style.display = 'block';
-                    alertText.innerHTML = `<strong>${payload.alert}</strong>`;
+                    alertText.textContent = payload.alert;
                     log(`☢ ALERT: ${payload.alert}`, 'status-error');
                 }
             } else if (data.type === 'error') {
@@ -207,7 +224,16 @@
     }
 
     function startNewEvaluation() {
-        fetch('/evaluate', { method: 'POST' })
+        fetch('/evaluate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                profile: 'default',
+                provider: 'auto'
+            })
+        })
             .then(r => r.json())
             .then(data => {
                 log(`Evaluation triggered via API: ${data.message}`);

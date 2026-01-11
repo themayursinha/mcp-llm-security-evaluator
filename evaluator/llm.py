@@ -161,7 +161,7 @@ class OllamaProvider(LLMProvider):
     async def generate(self, prompt: str, **kwargs) -> str:
         """Generate a response using Ollama API."""
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with httpx.AsyncClient(timeout=self.timeout, verify=True) as client:
                 response = await client.post(
                     f"{self.base_url}/api/generate",
                     json={

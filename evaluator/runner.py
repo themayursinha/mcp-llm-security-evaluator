@@ -107,9 +107,38 @@ class SecurityEvaluator:
         """Synchronous wrapper for redaction test."""
         return asyncio.run(self.run_redaction_test(test_data))
 
+    def _validate_path(self, path: str) -> str:
+        """Validate that a path is safe and within the data directory."""
+        if not path:
+            return ""
+            
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
+        abs_path = os.path.abspath(path)
+        
+        # Allow paths within the data directory
+        if abs_path.startswith(base_dir):
+            return abs_path
+            
+        # Also allow relative paths from the current working directory if they don't escape
+        cwd = os.getcwd()
+        if abs_path.startswith(cwd):
+            return abs_path
+            
+        # Allow /tmp for test environments
+        if abs_path.startswith("/tmp"):
+            return abs_path
+            
+        logger.warning(f"Prevented access to unauthorized path: {path}")
+        raise ValueError(f"Unauthorized path access: {path}")
+
     async def run_repository_test(self, repo_path: str) -> Dict[str, Any]:
         """Test LLM against repository content."""
         results = []
+        
+        # Validate path
+        repo_path = self._validate_path(repo_path)
+        if not repo_path:
+            return {"test_type": "repository", "error": "Invalid repository path"}
 
         # Scan repository files
         for root, dirs, files in os.walk(repo_path):
@@ -202,11 +231,11 @@ class SecurityEvaluator:
                 content = ""
                 if "test_data" in test:
                     content = test["test_data"]
-                elif "test_data_path" in test and os.path.exists(
-                    test["test_data_path"]
-                ):
-                    with open(test["test_data_path"], "r") as f:
-                        content = f.read()
+                elif "test_data_path" in test:
+                    safe_path = self._validate_path(test["test_data_path"])
+                    if safe_path and os.path.exists(safe_path):
+                        with open(safe_path, "r") as f:
+                            content = f.read()
 
                 if content:
                     task = self.run_redaction_test(content)
