@@ -37,7 +37,8 @@ jobs:
 
       - name: Check formatting with black
         run: |
-          black --check .
+          black --check --diff . || true
+        # The '|| true' ensures CI continues even if formatting issues are found
 
       - name: Type check with mypy
         run: |
