@@ -16,7 +16,7 @@ SENSITIVE_PATTERNS = [
 class RedactingFormatter(logging.Formatter):
     """Custom formatter that redacts sensitive patterns from log messages."""
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         import re
 
         message = super().format(record)
@@ -25,7 +25,7 @@ class RedactingFormatter(logging.Formatter):
         return message
 
 
-def setup_logging():
+def setup_logging() -> logging.Logger:
     """Setup structured logging for the application."""
     log_level = getattr(logging, Config.LOG_LEVEL, logging.INFO)
 
@@ -48,6 +48,7 @@ def setup_logging():
     logger.addHandler(console_handler)
 
     # File handler with rotation
+    file_handler: logging.Handler
     if Config.LOG_ROTATION:
         file_handler = RotatingFileHandler(
             log_file,
@@ -66,6 +67,6 @@ def setup_logging():
     return logger
 
 
-def get_logger(name):
+def get_logger(name: str) -> logging.Logger:
     """Get a named logger."""
     return logging.getLogger(name)
