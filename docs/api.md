@@ -1,89 +1,93 @@
-# API Documentation
+# API Guide
 
-The MCP LLM Security Evaluator can be used programmatically via its Python API.
+The project exposes a small FastAPI service for running evaluations remotely and browsing persisted reports.
 
-## SecurityEvaluator Class
-
-The main orchestrator located in `evaluator/runner.py`.
-
-### `SecurityEvaluator.__init__(config_path="prompts.yaml", llm_provider="auto", **llm_kwargs)`
-Initializes the evaluator.
-- `config_path`: Path to the YAML configuration.
-- `llm_provider`: "openai", "anthropic", "mock", or "auto".
-- `**llm_kwargs`: Additional arguments passed to the LLM client (e.g., `model="gpt-4"`).
-
-### `SecurityEvaluator.run_evaluation_suite()` (Async)
-Runs the full suite of redaction, repository, and MCP tests.
-- **Returns**: `Dict[str, Any]` containing all results and a summary.
-
-### `SecurityEvaluator.run_evaluation_suite_sync()`
-Synchronous wrapper for `run_evaluation_suite()`.
-
-## LLMClient Class
-
-Located in `evaluator/llm.py`.
-
-### `LLMClient.generate(prompt, **kwargs)` (Async)
-Generates a response from the configured LLM.
-- `prompt`: The text prompt.
-- `**kwargs`: Generation parameters (e.g., `max_tokens`, `temperature`).
-- **Returns**: `str` response.
-
-## DataRedactor Class
-
-Located in `app/security/redaction.py`.
-
-### `DataRedactor.redact(text, custom_patterns=None)`
-Redacts sensitive information from the given text.
-- `text`: Input string.
-- `custom_patterns`: Optional dictionary of replacement regexes.
-- **Returns**: `str` redacted text.
-## REST API
-
-The evaluator includes a FastAPI-based REST API for remote execution and history tracking.
-
-### Starting the Server
+## Start the Server
 ```bash
-python -m app.main --server --port 8000
+python -m app.main --server --host 127.0.0.1 --port 8000
 ```
 
-### Endpoints
+## Authentication
+API auth is optional and disabled by default.
 
-#### `POST /evaluate`
-Trigger a new security evaluation in the background.
-- **Parameters**: `profile`, `provider`, `model` (optional).
-- **Example**: `curl -X POST "http://localhost:8000/evaluate?profile=quick&provider=mock"`
+Enable it with:
+- `API_AUTH_REQUIRED=true`
+- `API_KEY=your-shared-secret`
 
-#### `GET /reports`
-List all historical evaluation reports (summary only).
-- **Parameters**: `offset`, `limit` (optional).
-- **Example**: `curl http://localhost:8000/reports`
+When enabled, send the key with the `X-API-Key` header.
 
-#### `GET /reports/{report_id}`
-Retrieve the full JSON report for a specific evaluation.
-- **Example**: `curl http://localhost:8000/reports/1`
+## Endpoints
 
-#### `GET /trends`
-Get historical security score trends for analysis.
-- **Example**: `curl http://localhost:8000/trends`
+### `GET /health`
+Basic readiness check.
 
-#### `GET /monitor` (Web UI)
-Access the live security monitoring dashboard with real-time event updates.
+Response:
+```json
+{
+  "status": "healthy",
+  "timestamp": "2026-03-06T18:00:00.000000"
+}
+```
 
-#### `WS /ws/events`
-WebSocket endpoint for real-time evaluation status and progress updates.
+### `POST /evaluate`
+Start a background evaluation.
 
-#### `GET /health`
-API health check.
+Request body:
+```json
+{
+  "profile": "default",
+  "provider": "mock",
+  "model": null
+}
+```
 
-## Performance and Scale Features
+Example:
+```bash
+curl \
+  -X POST http://127.0.0.1:8000/evaluate \
+  -H 'Content-Type: application/json' \
+  -d '{"profile":"default","provider":"mock"}'
+```
 
-### LLM Response Caching
-By default, the evaluator caches LLM responses in the SQLite database (`data/evaluator_history.db`). This significantly speeds up repeated evaluations and reduces API costs.
-- Disable via CLI: `--no-cache`
-- Programmatic: Pass `use_cache=False` to `generate()`
+Authenticated example:
+```bash
+curl \
+  -X POST http://127.0.0.1:8000/evaluate \
+  -H 'Content-Type: application/json' \
+  -H 'X-API-Key: your-shared-secret' \
+  -d '{"profile":"default","provider":"mock"}'
+```
 
-### Local Model Support
-Support for **Ollama** allows for 100% local, air-gapped security evaluations.
-- Start Ollama server locally.
-- Run with: `--provider ollama --model llama3 --base-url http://localhost:11434`
+### `GET /reports`
+Return summary rows for persisted reports.
+
+Query params:
+- `offset`
+- `limit`
+
+### `GET /reports/{report_id}`
+Return the full stored report JSON for one evaluation.
+
+### `GET /trends`
+Return historical overall and MCP scores.
+
+### `GET /monitor`
+Serve the built-in monitoring UI.
+
+### `WS /ws/events`
+Broadcast progress and completion events to the monitor UI.
+
+## Report Shape
+Stored reports use the same generated report shape as the CLI:
+- `evaluation_summary`
+- `provider_info`
+- `redaction_analysis`
+- `repository_analysis`
+- `mcp_analysis`
+- `overall_security_score`
+- `recommendations`
+
+## Notes
+- The monitor UI is intended for local or trusted-network use.
+- Response caching and report history are stored in `data/evaluator_history.db`.
+- For programmatic integrations, treat the docs in this folder as the current contract instead of older planning notes in `prd.md`.

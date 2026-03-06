@@ -100,6 +100,9 @@
                 <i class="fas fa-info-circle"></i> Quick Actions
             </div>
             <div class="card-body">
+                <label class="form-label" for="api-key-input">API Key (optional)</label>
+                <input id="api-key-input" type="password" class="form-control mb-3"
+                    placeholder="Used only when API auth is enabled">
                 <button class="btn btn-outline-primary w-100 mb-2" onclick="startNewEvaluation()">
                     <i class="fas fa-play"></i> Run Standard Suite
                 </button>
@@ -133,9 +136,11 @@
     const progressPercent = document.getElementById('progress-percent');
     const currentStep = document.getElementById('current-step');
     const currentTask = document.getElementById('current-task');
+    const currentProvider = document.getElementById('current-provider');
     const connStatus = document.getElementById('connection-status');
     const alertCard = document.getElementById('alert-card');
     const alertText = document.getElementById('alert-text');
+    const apiKeyInput = document.getElementById('api-key-input');
 
     function log(message, type = '') {
         const line = document.createElement('div');
@@ -146,17 +151,7 @@
         timeSpan.textContent = `[${new Date().toLocaleTimeString()}] `;
 
         line.appendChild(timeSpan);
-
-        // Handle potential HTML in message (e.g. links)
-        if (message.includes('<a ')) {
-            // For specifically trusted links, we can use innerHTML if we're careful, 
-            // but for general logs we should use textContent.
-            // Here we'll just use textContent for safety unless it's a known URL format.
-            line.innerHTML += message; // Fallback for existing links
-        } else {
-            const textNode = document.createTextNode(message);
-            line.appendChild(textNode);
-        }
+        line.appendChild(document.createTextNode(message));
 
         terminal.appendChild(line);
         terminal.scrollTop = terminal.scrollHeight;
@@ -165,6 +160,27 @@
         if (terminal.childElementCount > 100) {
             terminal.removeChild(terminal.firstElementChild);
         }
+    }
+
+    function logReportLink(reportId) {
+        const line = document.createElement('div');
+        line.className = 'terminal-line status-complete';
+
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'text-white-50';
+        timeSpan.textContent = `[${new Date().toLocaleTimeString()}] `;
+        line.appendChild(timeSpan);
+        line.appendChild(document.createTextNode('Full Report: '));
+
+        const link = document.createElement('a');
+        link.href = `/reports/${reportId}`;
+        link.target = '_blank';
+        link.className = 'text-info';
+        link.textContent = `Report #${reportId}`;
+        line.appendChild(link);
+
+        terminal.appendChild(line);
+        terminal.scrollTop = terminal.scrollHeight;
     }
 
     function setupWebSocket() {
@@ -209,7 +225,7 @@
                 log('✓ SECURITY EVALUATION COMPLETED', 'status-complete');
 
                 if (payload.report_id) {
-                    log(`Full Report: <a href="/reports/${payload.report_id}" target="_blank" class="text-info">Report #${payload.report_id}</a>`, 'status-complete');
+                    logReportLink(payload.report_id);
                 }
 
                 if (payload.alert) {
@@ -224,11 +240,21 @@
     }
 
     function startNewEvaluation() {
+        const headers = {
+            'Content-Type': 'application/json'
+        };
+        const apiKey = apiKeyInput.value.trim();
+
+        if (apiKey) {
+            headers['X-API-Key'] = apiKey;
+            localStorage.setItem('monitor_api_key', apiKey);
+        } else {
+            localStorage.removeItem('monitor_api_key');
+        }
+
         fetch('/evaluate', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers,
             body: JSON.stringify({
                 profile: 'default',
                 provider: 'auto'
@@ -238,11 +264,13 @@
             .then(data => {
                 log(`Evaluation triggered via API: ${data.message}`);
                 alertCard.style.display = 'none';
+                currentProvider.textContent = data.provider.toUpperCase();
             })
             .catch(e => log(`Failed to start evaluation: ${e}`, 'status-error'));
     }
 
     // Initialize
+    apiKeyInput.value = localStorage.getItem('monitor_api_key') || '';
     setupWebSocket();
 </script>
 {% endblock %}

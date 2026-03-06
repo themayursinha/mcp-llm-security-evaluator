@@ -1,6 +1,5 @@
 import os
 import asyncio
-import time
 from typing import Dict, Any, Optional, List
 from abc import ABC, abstractmethod
 from app.logging_config import get_logger
@@ -54,9 +53,29 @@ class MockLLMProvider(LLMProvider):
         # Accept any additional kwargs but ignore them
 
     async def generate(self, prompt: str, **kwargs) -> str:
-        """Generate a mock response."""
+        """Generate a deterministic safe response for local smoke tests."""
         await asyncio.sleep(self.delay)  # Simulate API delay
-        return f"Mock response to: {prompt[:50]}..."
+
+        prompt_lower = prompt.lower()
+        if any(
+            token in prompt_lower
+            for token in [
+                "sudo",
+                "elevated privileges",
+                "administrator",
+                "bypass security",
+                "protected files",
+            ]
+        ):
+            return "Mock provider refusal: unsafe or privileged actions are not allowed."
+
+        if any(
+            token in prompt_lower
+            for token in ["api key", "password", "secret", "token", "ssn", "email"]
+        ):
+            return "Mock provider response: sensitive details were detected and omitted."
+
+        return "Mock provider response: request acknowledged for smoke testing."
 
     def get_provider_name(self) -> str:
         return "mock"
@@ -67,9 +86,7 @@ class OpenAIProvider(LLMProvider):
 
     def __init__(self, api_key: Optional[str] = None, model: str = "gpt-3.5-turbo"):
         if not OPENAI_AVAILABLE:
-            raise ImportError(
-                "OpenAI package not available. Install with: pip install openai"
-            )
+            raise ImportError("OpenAI package not available. Install with: pip install openai")
 
         self.client = openai.AsyncOpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
         self.model = model
@@ -106,17 +123,13 @@ class OpenAIProvider(LLMProvider):
 class AnthropicProvider(LLMProvider):
     """Anthropic Claude API provider."""
 
-    def __init__(
-        self, api_key: Optional[str] = None, model: str = "claude-3-sonnet-20240229"
-    ):
+    def __init__(self, api_key: Optional[str] = None, model: str = "claude-3-sonnet-20240229"):
         if not ANTHROPIC_AVAILABLE:
             raise ImportError(
                 "Anthropic package not available. Install with: pip install anthropic"
             )
 
-        self.client = anthropic.AsyncAnthropic(
-            api_key=api_key or os.getenv("ANTHROPIC_API_KEY")
-        )
+        self.client = anthropic.AsyncAnthropic(api_key=api_key or os.getenv("ANTHROPIC_API_KEY"))
         self.model = model
         self.max_retries = 3
         self.retry_delay = 1.0
@@ -154,9 +167,7 @@ class OllamaProvider(LLMProvider):
 
     def __init__(self, base_url: str = "http://localhost:11434", model: str = "llama3"):
         if not HTTPX_AVAILABLE:
-            raise ImportError(
-                "httpx package not available. Install with: pip install httpx"
-            )
+            raise ImportError("httpx package not available. Install with: pip install httpx")
 
         self.base_url = base_url
         self.model = model
@@ -224,7 +235,7 @@ class LLMClient:
         if self._provider is None:
             raise RuntimeError("Provider not initialized")
 
-        use_cache = kwargs.get("use_cache", True)
+        use_cache = kwargs.get("use_cache", True) and not self.is_mock()
         provider_name = self.get_provider_name()
         model_name = getattr(self._provider, "model", "default")
 

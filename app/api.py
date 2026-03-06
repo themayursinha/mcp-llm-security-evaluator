@@ -1,31 +1,28 @@
-import os
-import asyncio
+from contextlib import asynccontextmanager
 from typing import List, Optional
 from fastapi import (
     FastAPI,
     Depends,
     HTTPException,
-    Query,
     BackgroundTasks,
     WebSocket,
     WebSocketDisconnect,
     Request,
-    Security,
 )
 from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select, col
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .database import engine, create_db_and_tables, save_report_to_db
 from .models import EvaluationReport
 from evaluator.runner import SecurityEvaluator
+from evaluator.metrics import generate_security_report
 from app.config import Config
 from app.logging_config import get_logger
 
@@ -33,7 +30,6 @@ logger = get_logger(__name__)
 
 # Security constants
 API_KEY_NAME = "X-API-Key"
-API_KEY = os.getenv("API_KEY", "mcp-security-eval-2024")  # Default for demo
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
 
@@ -43,11 +39,12 @@ class EvaluateRequest(BaseModel):
     provider: str = Field("auto", pattern=r"^(auto|openai|anthropic|ollama|mock)$")
     model: Optional[str] = Field(None, max_length=100)
 
-    @validator("profile")
-    def validate_profile(cls, v):
-        if not v.isalnum() and "_" not in v and "-" not in v:
+    @field_validator("profile")
+    @classmethod
+    def validate_profile(cls, value: str) -> str:
+        if not value.replace("_", "").replace("-", "").isalnum():
             raise ValueError("Profile name must be alphanumeric")
-        return v
+        return value
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -56,7 +53,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; "
-            "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' "
+            "https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; "
             "font-src 'self' https://cdnjs.cloudflare.com; "
             "img-src 'self' data:; "
             "connect-src 'self' ws: wss:;"
@@ -64,30 +62,41 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Strict-Transport-Security"] = (
-            "max-age=31536000; includeSubDomains"
-        )
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    create_db_and_tables()
+    yield
 
 
 app = FastAPI(
     title="MCP LLM Security Evaluator API",
     description="REST API for running and managing LLM security evaluations.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(SecurityHeadersMiddleware)
-# app.add_middleware(HTTPSRedirectMiddleware) # Uncomment to enforce HTTPS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust as needed
+    allow_origins=Config.API_ALLOWED_ORIGINS,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
 
-async def get_api_key(api_key: str = Depends(api_key_header)):
-    if not api_key or api_key != API_KEY:
+async def get_api_key(api_key: Optional[str] = Depends(api_key_header)):
+    if not Config.API_AUTH_REQUIRED:
+        return None
+
+    if not Config.API_KEY:
+        logger.error("API auth is enabled but API_KEY is not configured")
+        raise HTTPException(status_code=500, detail="API auth is not configured")
+
+    if not api_key or api_key != Config.API_KEY:
         raise HTTPException(
             status_code=403,
             detail="Could not validate credentials",
@@ -116,14 +125,7 @@ async def monitor_page(request: Request):
 async def reports_page(request: Request):
     """Serve a historical reports browser (TBD)."""
     # For now, redirect or serve a simple list
-    return templates.TemplateResponse(
-        "monitor.html", {"request": request}
-    )  # Fallback to monitor
-
-
-@app.on_event("startup")
-def on_startup():
-    create_db_and_tables()
+    return templates.TemplateResponse("monitor.html", {"request": request})  # Fallback to monitor
 
 
 def get_db_session():
@@ -184,17 +186,21 @@ async def run_evaluation_task(profile: str, provider: str, model: Optional[str] 
             **llm_kwargs,
         )
 
-        report = await evaluator.run_evaluation_suite()
+        evaluation_results = await evaluator.run_evaluation_suite()
+        report = generate_security_report(evaluation_results)
         db_report = save_report_to_db(report)
 
         # Send completion event and alert check
-        summary = report.get("summary", {})
-        score = summary.get("overall_security_score", 0.0)
+        summary = report.get("evaluation_summary", {})
+        score = report.get("overall_security_score", 0.0)
         threshold = Config.SECURITY_THRESHOLD
 
         alert = None
         if score < threshold:
-            alert = f"SECURITY ALERT: Overall score {score}% is below threshold {threshold}%!"
+            alert = (
+                f"SECURITY ALERT: Overall score {score:.1f}% is below "
+                f"threshold {threshold:.1f}%!"
+            )
             logger.warning(alert)
 
         await manager.broadcast(
@@ -202,6 +208,7 @@ async def run_evaluation_task(profile: str, provider: str, model: Optional[str] 
                 "type": "complete",
                 "payload": {
                     "summary": summary,
+                    "overall_security_score": report.get("overall_security_score", 0.0),
                     "alert": alert,
                     "report_id": db_report.id,
                 },
@@ -215,14 +222,14 @@ async def run_evaluation_task(profile: str, provider: str, model: Optional[str] 
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "timestamp": datetime.utcnow()}
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc)}
 
 
 @app.post("/evaluate")
 async def trigger_evaluation(
     request_data: EvaluateRequest,
     background_tasks: BackgroundTasks,
-    # api_key: str = Depends(get_api_key), # Uncomment to enable auth
+    _api_key: Optional[str] = Depends(get_api_key),
 ):
     """Trigger a new security evaluation."""
     profile = request_data.profile
@@ -235,13 +242,12 @@ async def trigger_evaluation(
         "profile": profile,
         "provider": provider,
         "model": model or "default",
+        "authentication_required": Config.API_AUTH_REQUIRED,
     }
 
 
 @app.get("/reports", response_model=List[dict])
-def list_reports(
-    offset: int = 0, limit: int = 100, session: Session = Depends(get_db_session)
-):
+def list_reports(offset: int = 0, limit: int = 100, session: Session = Depends(get_db_session)):
     """List all historical evaluation reports (summary only)."""
     statement = (
         select(  # type: ignore
@@ -297,6 +303,4 @@ def get_trends(limit: int = 10, session: Session = Depends(get_db_session)):
     )
 
     results = session.exec(statement).all()
-    return [
-        {"timestamp": r[0], "overall_score": r[1], "mcp_score": r[2]} for r in results
-    ]
+    return [{"timestamp": r[0], "overall_score": r[1], "mcp_score": r[2]} for r in results]

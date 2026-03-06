@@ -37,9 +37,7 @@ class DataRedactor:
             ],
         }
 
-    def redact(
-        self, text: str, custom_patterns: Optional[Dict[str, List[str]]] = None
-    ) -> str:
+    def redact(self, text: str, custom_patterns: Optional[Dict[str, List[str]]] = None) -> str:
         """Redact sensitive information from text."""
         redacted_text = text
 
@@ -71,9 +69,7 @@ class DataRedactor:
 
         return detected
 
-    def get_redaction_stats(
-        self, original_text: str, redacted_text: str
-    ) -> Dict[str, Any]:
+    def get_redaction_stats(self, original_text: str, redacted_text: str) -> Dict[str, Any]:
         """Get statistics about redaction process."""
         original_detected = self.detect_sensitive_data(original_text)
         redacted_detected = self.detect_sensitive_data(redacted_text)
@@ -85,9 +81,7 @@ class DataRedactor:
             "original_sensitive_count": total_original,
             "redacted_sensitive_count": total_redacted,
             "redaction_effectiveness": (
-                (total_original - total_redacted) / total_original
-                if total_original > 0
-                else 0
+                (total_original - total_redacted) / total_original if total_original > 0 else 0
             ),
             "categories_found": list(original_detected.keys()),
             "categories_remaining": list(redacted_detected.keys()),

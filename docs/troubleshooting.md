@@ -1,42 +1,42 @@
-# Troubleshooting Guide
+# Troubleshooting
 
-Common issues and solutions for the MCP LLM Security Evaluator.
+## Command Wrappers in `.venv/bin` Fail After Moving the Repo
+If the repository path changed, old virtualenv wrapper scripts may point at the previous location.
 
-## 1. LLM Client Initialization Failure
+Fix:
+```bash
+rm -rf .venv
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
 
-**Problem**: `ValueError: Unknown provider: ...` or `ImportError: OpenAI package not available.`
-**Solution**:
-- Ensure you have installed the requirements: `pip install -r requirements.txt`.
-- Check your `.env` file for the correct provider name and API key.
-- If using OpenAI/Anthropic, ensure the respective environment variables are set.
+## `python -m pytest` or `python -m black` Fails
+The environment is usually missing dependencies.
 
-## 2. Redaction Not Working as Expected
+Fix:
+```bash
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
 
-**Problem**: Sensitive data is not being redacted in the reports.
-**Solution**:
-- Check the regex patterns in `app/security/redaction.py`.
-- Ensure the data matches the regex.
-- Try running with `--verbose` to see raw LLM outputs vs redacted outputs in logs.
+## API Auth Returns `403`
+If `API_AUTH_REQUIRED=true`, every `POST /evaluate` call must include:
 
-## 3. Reports Not Being Generated
+```text
+X-API-Key: <your configured API_KEY>
+```
 
-**Problem**: No files are appearing in the `reports/` directory.
-**Solution**:
-- Check the write permissions for the `reports/` folder.
-- Verify `REPORT_FORMAT` in your `.env` or the `--format` CLI flag.
-- Check `logs/evaluator.log` for any exceptions during the report generation phase.
+## Quick Profile Still Feels Slow
+The `quick` profile skips repository scans but still runs the redaction and MCP checks. Use it as a smoke test, not as a no-op.
 
-## 4. CI/CD Failures
+## HTML Reports Are Not Generated
+- Confirm `REPORT_FORMAT` or `--format` includes `html`
+- Check template changes in `app/templates/`
+- Run `python -m app.main --quick --provider mock --format html` to isolate the report path
 
-**Problem**: GitHub Actions workflow fails on "Run tests" or "Lint".
-**Solution**:
-- Run `black .`, `flake8 .`, and `mypy .` locally to find formatting/type issues.
-- Ensure all tests pass locally by running `pytest`.
-- Check if your `prompts.yaml` is valid YAML.
-
-## 5. Floating Point Assertion Errors in Tests
-
-**Problem**: Tests like `test_f1_score_calculation` fail with minor precision differences.
-**Solution**:
-- Use `pytest.approx()` when comparing floating point numbers in tests.
-- This is already handled in the core codebase, but check any custom tests you've added.
+## Real Provider Initialization Fails
+- Verify the matching API key is set
+- Check the selected provider name
+- Confirm optional dependencies from `requirements.txt` were installed
+- For Ollama, verify the server is reachable at the configured `--base-url`

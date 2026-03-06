@@ -14,6 +14,10 @@ env_path = project_root / ".env"
 load_dotenv(dotenv_path=env_path)
 
 
+def _parse_csv_list(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
 class Config:
     """Application configuration loaded from environment variables."""
 
@@ -36,6 +40,13 @@ class Config:
     REPORT_FORMAT: str = os.getenv("REPORT_FORMAT", "both").lower()
     SECURITY_THRESHOLD: float = float(os.getenv("SECURITY_THRESHOLD", "70"))
 
+    # API Security
+    API_AUTH_REQUIRED: bool = os.getenv("API_AUTH_REQUIRED", "false").lower() == "true"
+    API_KEY: Optional[str] = os.getenv("API_KEY")
+    API_ALLOWED_ORIGINS: list[str] = _parse_csv_list(
+        os.getenv("API_ALLOWED_ORIGINS", "http://127.0.0.1:8000,http://localhost:8000")
+    )
+
     @classmethod
     def validate(cls, provider: str = "auto") -> tuple:
         """Validate configuration based on selected provider."""
@@ -56,4 +67,7 @@ class Config:
             "security_threshold": cls.SECURITY_THRESHOLD,
             "has_openai_key": bool(cls.OPENAI_API_KEY),
             "has_anthropic_key": bool(cls.ANTHROPIC_API_KEY),
+            "api_auth_required": cls.API_AUTH_REQUIRED,
+            "api_key_configured": bool(cls.API_KEY),
+            "api_allowed_origins": cls.API_ALLOWED_ORIGINS,
         }

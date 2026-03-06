@@ -1,0 +1,14 @@
+[tool.black]
+line-length = 100
+target-version = ["py311", "py312"]
+include = '\.pyi?$'
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["app", "evaluator", "tests"]
+ignore_missing_imports = true
+warn_unused_configs = true

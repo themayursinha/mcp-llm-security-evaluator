@@ -26,6 +26,9 @@ class ConfigValidator:
                 # This is OK - will fall back to mock
                 pass
 
+        if Config.API_AUTH_REQUIRED and not Config.API_KEY:
+            return False, "API_KEY is required when API_AUTH_REQUIRED is enabled"
+
         if Config.REPORT_FORMAT not in ["json", "html", "both"]:
             return (
                 False,
@@ -41,7 +44,8 @@ class ConfigValidator:
         if Config.LOG_LEVEL not in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
             return (
                 False,
-                f"LOG_LEVEL must be one of: DEBUG, INFO, WARNING, ERROR, CRITICAL, got '{Config.LOG_LEVEL}'",
+                "LOG_LEVEL must be one of: DEBUG, INFO, WARNING, ERROR, CRITICAL, "
+                f"got '{Config.LOG_LEVEL}'",
             )
 
         return True, None

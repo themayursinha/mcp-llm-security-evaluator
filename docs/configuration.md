@@ -1,46 +1,65 @@
 # Configuration Guide
 
-This guide explains how to configure the MCP LLM Security Evaluator for various testing scenarios.
+## Environment Variables
 
-## 1. Environment Variables (.env)
+Copy `.env.example` to `.env` and change only what you need.
 
-The evaluator uses a `.env` file for core settings and API keys.
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OPENAI_API_KEY` | API key for OpenAI provider | None |
-| `ANTHROPIC_API_KEY` | API key for Anthropic provider | None |
-| `LOG_LEVEL` | Logging verbosity (DEBUG, INFO, etc.) | INFO |
-| `REPORT_FORMAT` | output format (json, html, both) | both |
-| `SECURITY_THRESHOLD` | Score (0-100) below which CI fails | 70 |
-| `LOG_FILE` | Path to log file | logs/evaluator.log |
-
-## 2. Prompts Configuration (prompts.yaml)
-
-The `prompts.yaml` file defines the test scenarios and evaluation profiles.
-
-### Structure
-```yaml
-version: "2.0"
-profiles:
-  default:
-    description: "Standard suite"
-    redaction_tests: [...]
-    repository_tests: [...]
-    mcp_tests: [...]
+```bash
+cp .env.example .env
 ```
 
-### Profiles
-- **default**: Comprehensive testing including all categories.
-- **quick**: Optimized for speed, skips long-running scans.
+### Provider Settings
+- `OPENAI_API_KEY`
+- `ANTHROPIC_API_KEY`
+- `DEFAULT_MODEL`
+- `MAX_TOKENS`
 
-## 3. Customizing Redaction Patterns
+### Reporting
+- `REPORT_FORMAT` = `json`, `html`, or `both`
+- `SECURITY_THRESHOLD` = exit-code threshold for CLI runs
 
-Edit `app/security/redaction.py` to add new regex patterns for sensitive data detection. The `DataRedactor` class maintains the `redaction_patterns` dictionary.
+### Logging
+- `LOG_LEVEL`
+- `LOG_FILE`
+- `LOG_ROTATION`
+- `LOG_MAX_SIZE`
+- `LOG_BACKUP_COUNT`
 
-## 4. Running Specific Tests
+### API Security
+- `API_AUTH_REQUIRED` = `true` or `false`
+- `API_KEY` = shared secret required when API auth is enabled
+- `API_ALLOWED_ORIGINS` = comma-separated CORS allowlist
 
-Use CLI flags to override configuration:
-- `--quick`: Skips repository scans.
-- `--provider [openai|anthropic|mock]`: Switches LLM backend.
-- `--format [json|html]`: Overrides output format.
+Default API CORS values are limited to:
+- `http://127.0.0.1:8000`
+- `http://localhost:8000`
+
+## Prompt Profiles
+`prompts.yaml` defines evaluation profiles.
+
+Current built-in profiles:
+- `default` for the broader suite
+- `quick` for fast smoke testing without repository scans
+
+## CLI Overrides
+CLI flags override environment defaults when applicable.
+
+Examples:
+```bash
+python -m app.main --provider mock --format html
+python -m app.main --provider ollama --model llama3 --base-url http://localhost:11434
+python -m app.main --quick --no-cache
+```
+
+## Caching and Persistence
+- LLM response cache lives in `data/evaluator_history.db`
+- Historical reports are persisted in the same SQLite database
+- Generated JSON and HTML reports are written to `reports/`
+
+## Configuration Validation
+Startup validation currently checks:
+- provider-specific API key requirements
+- report format validity
+- security threshold range
+- log level validity
+- API auth consistency (`API_KEY` must exist when auth is enabled)

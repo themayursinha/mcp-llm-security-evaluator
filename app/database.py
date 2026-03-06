@@ -32,9 +32,7 @@ def generate_cache_key(provider: str, model: str, prompt: str, parameters: dict)
     return hashlib.sha256(raw_key.encode()).hexdigest()
 
 
-def get_cached_response(
-    provider: str, model: str, prompt: str, parameters: dict
-) -> Optional[str]:
+def get_cached_response(provider: str, model: str, prompt: str, parameters: dict) -> Optional[str]:
     """Retrieve a cached response if available."""
     cache_key = generate_cache_key(provider, model, prompt, parameters)
     with Session(engine) as session:
@@ -45,9 +43,7 @@ def get_cached_response(
         return None
 
 
-def save_to_cache(
-    provider: str, model: str, prompt: str, response: str, parameters: dict
-):
+def save_to_cache(provider: str, model: str, prompt: str, response: str, parameters: dict):
     """Save a response to the cache."""
     cache_key = generate_cache_key(provider, model, prompt, parameters)
     prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
@@ -89,7 +85,7 @@ def get_session():
 
 def save_report_to_db(report: dict):
     """Save an evaluation report to the database."""
-    summary = report.get("summary", {})
+    summary = report.get("summary") or report.get("evaluation_summary", {})
     provider_info = report.get("provider_info", {})
 
     # Redact sensitive data in the report JSON before saving
@@ -107,6 +103,7 @@ def save_report_to_db(report: dict):
         execution_time=summary.get("execution_time", 0.0),
         provider=provider_info.get("provider", "unknown"),
         is_mock=provider_info.get("is_mock", True),
+        status=report.get("status", "completed"),
         report_json=report_json,
     )
 

@@ -40,9 +40,7 @@ def setup_logging():
     logger.setLevel(log_level)
 
     # Formatting
-    formatter = RedactingFormatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
+    formatter = RedactingFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     # Console handler
     console_handler = logging.StreamHandler()

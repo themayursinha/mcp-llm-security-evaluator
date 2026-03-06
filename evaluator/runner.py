@@ -3,21 +3,11 @@ import yaml  # type: ignore
 import asyncio
 import time
 from typing import Dict, List, Any, Optional, Callable
-from .llm import LLMClient, MultiLLMClient
+from .llm import LLMClient
 from .metrics import calculate_security_metrics
 from .mcp_client import MCPSecurityTester, SAMPLE_MCP_TOOLS
 
-# Import redaction function - handle both relative and absolute imports
-try:
-    from ..app.security.redaction import redact
-except ImportError:
-    # Fallback for when running as module
-    import sys
-    from pathlib import Path
-
-    sys.path.append(str(Path(__file__).parent.parent))
-    from app.security.redaction import redact
-
+from app.security.redaction import redact
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -112,9 +102,7 @@ class SecurityEvaluator:
         if not path:
             return ""
 
-        base_dir = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "data")
-        )
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
         abs_path = os.path.abspath(path)
 
         # Allow paths within the data directory
@@ -152,9 +140,7 @@ class SecurityEvaluator:
                             content = f.read()
 
                         # Test LLM response to file content
-                        response = await self.llm_client.generate(
-                            f"Analyze this code:\n{content}"
-                        )
+                        response = await self.llm_client.generate(f"Analyze this code:\n{content}")
 
                         # Check for potential data leakage
                         leakage_detected = self._detect_data_leakage(content, response)
@@ -209,8 +195,9 @@ class SecurityEvaluator:
         config = self.load_config()
 
         # Determine which profile to use
+        use_profiles = "profiles" in config
         profile_data = {}
-        if "profiles" in config:
+        if use_profiles:
             profile_data = config["profiles"].get(
                 self.profile_name, config["profiles"].get("default", {})
             )
@@ -228,20 +215,21 @@ class SecurityEvaluator:
 
         # Run redaction tests from config if available, otherwise use defaults
         redaction_tasks = []
-        if "redaction_tests" in profile_data:
-            for test in profile_data["redaction_tests"]:
-                content = ""
-                if "test_data" in test:
-                    content = test["test_data"]
-                elif "test_data_path" in test:
-                    safe_path = self._validate_path(test["test_data_path"])
-                    if safe_path and os.path.exists(safe_path):
-                        with open(safe_path, "r") as f:
-                            content = f.read()
+        if use_profiles:
+            if "redaction_tests" in profile_data:
+                for test in profile_data["redaction_tests"]:
+                    content = ""
+                    if "test_data" in test:
+                        content = test["test_data"]
+                    elif "test_data_path" in test:
+                        safe_path = self._validate_path(test["test_data_path"])
+                        if safe_path and os.path.exists(safe_path):
+                            with open(safe_path, "r") as f:
+                                content = f.read()
 
-                if content:
-                    task = self.run_redaction_test(content)
-                    redaction_tasks.append(task)
+                    if content:
+                        task = self.run_redaction_test(content)
+                        redaction_tasks.append(task)
         else:
             # Fallback for backward compatibility
             test_data_files = ["data/repoA/secret.txt", "data/repoB/readme.md"]
@@ -254,12 +242,13 @@ class SecurityEvaluator:
 
         # Run repository tests
         repo_tasks = []
-        if "repository_tests" in profile_data:
-            for test in profile_data["repository_tests"]:
-                repo_path = test.get("path")
-                if repo_path and os.path.exists(repo_path):
-                    task = self.run_repository_test(repo_path)
-                    repo_tasks.append(task)
+        if use_profiles:
+            if "repository_tests" in profile_data:
+                for test in profile_data["repository_tests"]:
+                    repo_path = test.get("path")
+                    if repo_path and os.path.exists(repo_path):
+                        task = self.run_repository_test(repo_path)
+                        repo_tasks.append(task)
         else:
             repo_paths = ["data/repoA", "data/repoB"]
             for repo_path in repo_paths:
@@ -273,23 +262,17 @@ class SecurityEvaluator:
 
         for i, task in enumerate(redaction_tasks):
             wrapped_tasks.append(
-                self._wrap_test(
-                    task, f"Redaction test {i+1}", i + 1, total_tests, "redaction"
-                )
+                self._wrap_test(task, f"Redaction test {i+1}", i + 1, total_tests, "redaction")
             )
 
         for i, task in enumerate(repo_tasks):
             idx = len(redaction_tasks) + i + 1
             wrapped_tasks.append(
-                self._wrap_test(
-                    task, f"Repository test {i+1}", idx, total_tests, "repository"
-                )
+                self._wrap_test(task, f"Repository test {i+1}", idx, total_tests, "repository")
             )
 
         if wrapped_tasks:
-            test_results: List[Any] = await asyncio.gather(
-                *wrapped_tasks, return_exceptions=True
-            )
+            test_results: List[Any] = await asyncio.gather(*wrapped_tasks, return_exceptions=True)
 
             # Process results
             redaction_count = len(redaction_tasks)

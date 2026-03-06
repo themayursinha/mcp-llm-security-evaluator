@@ -9,11 +9,6 @@ import json
 import os
 import sys
 from datetime import datetime
-from pathlib import Path
-
-# Add project root to path for imports
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
 
 from evaluator.runner import SecurityEvaluator
 from evaluator.metrics import generate_security_report, generate_html_report
@@ -72,16 +67,11 @@ def print_summary(report: dict):
         mcp_summary = mcp_analysis.get("summary", {})
         print(f"  Tools Tested: {mcp_summary.get('total_tools_tested', 0)}")
         print(f"  High Risk Tools: {mcp_summary.get('high_risk_tools', 0)}")
-        print(
-            f"  Privilege Escalation: {'Yes' if mcp_summary.get('privilege_escalation_detected', False) else 'No'}"
-        )
-        print(
-            f"  MCP Security Score: {mcp_summary.get('mcp_security_score', 0):.1f}/100"
-        )
+        privilege_escalation = mcp_summary.get("privilege_escalation_detected", False)
+        print(f"  Privilege Escalation: {'Yes' if privilege_escalation else 'No'}")
+        print(f"  MCP Security Score: {mcp_summary.get('mcp_security_score', 0):.1f}/100")
 
-    print(
-        f"\nOverall Security Score: {report.get('overall_security_score', 0):.1f}/100"
-    )
+    print(f"\nOverall Security Score: {report.get('overall_security_score', 0):.1f}/100")
 
     recommendations = report.get("recommendations", [])
     if recommendations:
@@ -107,9 +97,7 @@ def main():
         default="reports",
         help="Directory to save reports (default: reports)",
     )
-    parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Enable verbose output"
-    )
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose output")
     parser.add_argument(
         "--quick",
         action="store_true",
@@ -126,36 +114,24 @@ def main():
         choices=["auto", "openai", "anthropic", "ollama", "mock"],
         help="LLM provider to use (default: auto)",
     )
-    parser.add_argument(
-        "--model", help="Specific model to use (e.g., gpt-4, claude-3-sonnet)"
-    )
+    parser.add_argument("--model", help="Specific model to use (e.g., gpt-4, claude-3-sonnet)")
     parser.add_argument(
         "--max-tokens",
         type=int,
         default=1000,
         help="Maximum tokens for LLM responses (default: 1000)",
     )
-    parser.add_argument(
-        "--base-url", help="Base URL for local LLM providers (e.g., for Ollama)"
-    )
-    parser.add_argument(
-        "--no-cache", action="store_true", help="Disable LLM response caching"
-    )
+    parser.add_argument("--base-url", help="Base URL for local LLM providers (e.g., for Ollama)")
+    parser.add_argument("--no-cache", action="store_true", help="Disable LLM response caching")
     parser.add_argument(
         "--format",
         choices=["json", "html", "both"],
         default=Config.REPORT_FORMAT,
         help=f"Report format: json, html, or both (default: {Config.REPORT_FORMAT})",
     )
-    parser.add_argument(
-        "--server", action="store_true", help="Start the REST API server"
-    )
-    parser.add_argument(
-        "--host", default="127.0.0.1", help="API server host (default: 127.0.0.1)"
-    )
-    parser.add_argument(
-        "--port", type=int, default=8000, help="API server port (default: 8000)"
-    )
+    parser.add_argument("--server", action="store_true", help="Start the REST API server")
+    parser.add_argument("--host", default="127.0.0.1", help="API server host (default: 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=8000, help="API server port (default: 8000)")
 
     args = parser.parse_args()
 
@@ -209,7 +185,6 @@ def main():
             print(f"Output directory: {args.output_dir}")
             print(f"LLM Provider: {evaluator.llm_client.get_provider_name()}")
             print(f"Using mock provider: {evaluator.llm_client.is_mock()}")
-            config_summary = Config.get_summary()
             print(f"Report format: {args.format}")
             print(f"Security threshold: {Config.SECURITY_THRESHOLD}")
             print(f"Log level: {Config.LOG_LEVEL}")
@@ -259,9 +234,7 @@ def main():
         overall_score = report.get("overall_security_score", 0)
         threshold = Config.SECURITY_THRESHOLD
         if overall_score < threshold:
-            print(
-                f"\n⚠️  Security score below threshold ({threshold}). Score: {overall_score:.1f}"
-            )
+            print(f"\n⚠️  Security score below threshold ({threshold}). Score: {overall_score:.1f}")
             sys.exit(1)
         else:
             print(f"\n✅ Security evaluation passed. Score: {overall_score:.1f}")
