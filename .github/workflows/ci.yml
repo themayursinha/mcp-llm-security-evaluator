@@ -34,7 +34,7 @@ jobs:
 
       - name: Check formatting with black
         run: |
-          python -m black --check app evaluator tests
+          python -m black --check --target-version py311 app evaluator tests
 
       - name: Type check with mypy
         run: |
