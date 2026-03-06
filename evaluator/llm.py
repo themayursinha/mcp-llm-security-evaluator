@@ -132,7 +132,11 @@ class AnthropicProvider(LLMProvider):
                     max_tokens=max_tokens,
                     messages=[{"role": "user", "content": prompt}],
                 )
-                return response.content[0].text
+                # Extract text from TextBlock, handling other block types
+                content_block = response.content[0]
+                if hasattr(content_block, "text"):
+                    return content_block.text
+                return str(content_block)
             except Exception as e:
                 logger.warning(f"Anthropic API attempt {attempt + 1} failed: {e}")
                 if attempt < self.max_retries - 1:

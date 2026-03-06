@@ -4,17 +4,6 @@ from logging.handlers import RotatingFileHandler
 from app.config import Config
 
 
-def setup_logging():
-    """Setup structured logging for the application."""
-    log_level = getattr(logging, Config.LOG_LEVEL, logging.INFO)
-
-    # Create logs directory if it doesn't exist
-    log_file = Config.LOG_FILE
-    log_dir = os.path.dirname(log_file)
-    if log_dir and not os.path.exists(log_dir):
-        os.makedirs(log_dir, exist_ok=True)
-
-
 # Filter patterns for redaction (consistent with the app's redactor)
 SENSITIVE_PATTERNS = [
     r"(?i)api[_-]?key\s*[:=]\s*['\"]?[a-zA-Z0-9_-]{10,}['\"]?",
