@@ -87,6 +87,16 @@ Stored reports use the same generated report shape as the CLI:
 - `overall_security_score`
 - `recommendations`
 
+`mcp_analysis` includes the MCP control-plane sections:
+- `tool_tests`
+- `stateful_tests`
+- `inventory`
+- `catalog_snapshot`
+- `catalog_diff`
+- `policy_findings`
+- `audit_events`
+- `summary`
+
 ## Notes
 - The monitor UI is intended for local or trusted-network use.
 - Response caching and report history are stored in `data/evaluator_history.db`.

@@ -17,6 +17,7 @@ cp .env.example .env
 ### Reporting
 - `REPORT_FORMAT` = `json`, `html`, or `both`
 - `SECURITY_THRESHOLD` = exit-code threshold for CLI runs
+- `EVALUATOR_DB_PATH` = optional SQLite path for report history and LLM cache
 
 ### Logging
 - `LOG_LEVEL`
@@ -40,6 +41,63 @@ Default API CORS values are limited to:
 Current built-in profiles:
 - `default` for the broader suite
 - `quick` for fast smoke testing without repository scans
+
+## MCP Control-Plane Configuration
+Profiles can include MCP review controls alongside prompt tests.
+
+### Server inventory
+Use `mcp_servers` for inline server declarations, or `mcp_inventory_paths` for
+JSON/YAML files that contain common MCP client config shapes such as
+`mcpServers`.
+
+```yaml
+mcp_servers:
+  filesystem:
+    command: "npx"
+    args:
+      - "@modelcontextprotocol/server-filesystem@1.2.3"
+      - "data"
+    transport: "stdio"
+    version: "1.2.3"
+    owner: "security"
+    approved: true
+```
+
+### Tool catalog baseline
+Use `previous_tool_catalog` to compare the current tool metadata against a known
+baseline. Diffs include added, removed, and changed tools, with field-level
+change hints for descriptions, parameters, annotations, and output schemas.
+
+```yaml
+previous_tool_catalog:
+  tools:
+    - name: "database_query"
+      source_server: "prod-db"
+      description: "Execute read-only database queries"
+      parameters:
+        query: "string"
+        database: "string"
+```
+
+### Policy checks
+Use `mcp_policy` to express coarse-grained controls for the evaluator.
+
+```yaml
+mcp_policy:
+  default_action: "allow"
+  require_approval_for_risk:
+    - "high"
+  require_approval_for_tools:
+    - "file_write"
+    - "database_query"
+  denied_tools:
+    - "system_execute"
+  block_sensitive_to_outbound: true
+  block_token_passthrough: true
+```
+
+Policy findings are advisory in the report. Critical and high findings affect
+the MCP security score.
 
 ## CLI Overrides
 CLI flags override environment defaults when applicable.

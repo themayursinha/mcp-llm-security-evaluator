@@ -137,6 +137,97 @@
                     {{ "%.1f"|format(mcp_summary.mcp_security_score) }}/100
                 </span>
             </div>
+
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <strong>Policy Findings:</strong> {{ mcp_summary.policy_findings or 0 }}
+                </div>
+                <div class="col-md-3">
+                    <strong>Catalog Drift:</strong>
+                    +{{ mcp_summary.catalog_added or 0 }}
+                    -{{ mcp_summary.catalog_removed or 0 }}
+                    ~{{ mcp_summary.catalog_changed or 0 }}
+                </div>
+                <div class="col-md-3">
+                    <strong>Inventory Servers:</strong> {{ mcp_summary.inventory_servers or 0 }}
+                </div>
+                <div class="col-md-3">
+                    <strong>Audit Events:</strong> {{ mcp_summary.audit_events or 0 }}
+                </div>
+            </div>
+
+            {% if mcp_analysis.inventory and mcp_analysis.inventory.servers %}
+            <h6 class="mt-4">Server Inventory</h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>Server</th>
+                            <th>Transport</th>
+                            <th>Approved</th>
+                            <th>Version</th>
+                            <th>Source</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for server in mcp_analysis.inventory.servers %}
+                        <tr>
+                            <td>{{ server.name }}</td>
+                            <td>{{ server.transport }}</td>
+                            <td>
+                                {% if server.approved %}
+                                <span class="badge bg-success">Yes</span>
+                                {% else %}
+                                <span class="badge bg-warning">No</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ server.version or "unknown" }}</td>
+                            <td>{{ server.source }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+            {% if mcp_analysis.policy_findings %}
+            <h6 class="mt-4">Policy Findings</h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>Severity</th>
+                            <th>Control</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for finding in mcp_analysis.policy_findings[:10] %}
+                        <tr>
+                            <td>
+                                <span
+                                    class="badge {{ 'bg-danger' if finding.severity in ['critical', 'high'] else 'bg-warning' if finding.severity == 'medium' else 'bg-secondary' }}">
+                                    {{ finding.severity }}
+                                </span>
+                            </td>
+                            <td>{{ finding.control }}</td>
+                            <td>{{ finding.message }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+            {% if mcp_analysis.catalog_diff %}
+            <h6 class="mt-4">Tool Catalog Diff</h6>
+            {% set catalog_diff = mcp_analysis.catalog_diff %}
+            <p class="text-muted mb-2">
+                Added {{ catalog_diff.summary.added or 0 }},
+                removed {{ catalog_diff.summary.removed or 0 }},
+                changed {{ catalog_diff.summary.changed or 0 }}.
+            </p>
+            {% endif %}
         </div>
     </div>
     {% elif mcp_analysis and 'error' in mcp_analysis %}
@@ -203,6 +294,9 @@
             const esc = mcp.privilege_escalation_detected ? 'Yes' : 'No';
             csvContent += `MCP,Overall,${score},Tools Tested,${mcp.total_tools_tested || 0},${esc}\n`;
             csvContent += `MCP,Overall,${score},High Risk Tools,${mcp.high_risk_tools || 0},N/A\n`;
+            csvContent += `MCP,Overall,${score},Policy Findings,${mcp.policy_findings || 0},N/A\n`;
+            csvContent += `MCP,Overall,${score},Catalog Changed,${mcp.catalog_changed || 0},N/A\n`;
+            csvContent += `MCP,Overall,${score},Inventory Servers,${mcp.inventory_servers || 0},N/A\n`;
         }
 
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

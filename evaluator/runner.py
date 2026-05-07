@@ -2,6 +2,7 @@ import os
 import yaml  # type: ignore
 import asyncio
 import time
+import tempfile
 from typing import Dict, List, Any, Optional, Callable
 from .llm import LLMClient
 from .metrics import calculate_security_metrics
@@ -111,11 +112,14 @@ class SecurityEvaluator:
 
         # Also allow relative paths from the current working directory if they don't escape
         cwd = os.getcwd()
-        if abs_path.startswith(cwd):
+        if abs_path == cwd or abs_path.startswith(cwd + os.sep):
             return abs_path
 
-        # Allow /tmp for test environments
-        if abs_path.startswith("/tmp"):
+        # Allow platform temp directories for test environments.
+        temp_dir = os.path.abspath(tempfile.gettempdir())
+        private_temp_dir = os.path.abspath(os.path.join(os.sep, "private", temp_dir.lstrip(os.sep)))
+        if (abs_path == temp_dir or abs_path.startswith(temp_dir + os.sep) or
+            abs_path == private_temp_dir or abs_path.startswith(private_temp_dir + os.sep)):
             return abs_path
 
         logger.warning(f"Prevented access to unauthorized path: {path}")
@@ -161,9 +165,11 @@ class SecurityEvaluator:
         """Synchronous wrapper for repository test."""
         return asyncio.run(self.run_repository_test(repo_path))
 
-    async def run_mcp_security_tests(self) -> Dict[str, Any]:
+    async def run_mcp_security_tests(
+        self, config: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """Run MCP security tests."""
-        return await self.mcp_tester.run_mcp_security_tests(self.llm_client)
+        return await self.mcp_tester.run_mcp_security_tests(self.llm_client, config)
 
     def run_mcp_security_tests_sync(self) -> Dict[str, Any]:
         """Synchronous wrapper for MCP security tests."""
@@ -297,7 +303,7 @@ class SecurityEvaluator:
                 current=total_tests,
                 total=total_tests,
             )
-            results["mcp_tests"] = await self.run_mcp_security_tests()
+            results["mcp_tests"] = await self.run_mcp_security_tests(config=profile_data)
         except Exception as e:
             results["mcp_tests"] = {"error": str(e), "test_type": "mcp_error"}
 
@@ -316,7 +322,7 @@ class SecurityEvaluator:
 
     def _generate_summary(self, results: Dict[str, Any]) -> Dict[str, Any]:
         """Generate evaluation summary."""
-        total_tests = len(results["redaction_tests"]) + len(results["repository_tests"])
+        base_tests = len(results["redaction_tests"]) + len(results["repository_tests"])
         leakage_count = sum(
             1
             for test in results["repository_tests"]
@@ -327,6 +333,8 @@ class SecurityEvaluator:
         # Include MCP test results
         mcp_tests = results.get("mcp_tests", {})
         mcp_summary = mcp_tests.get("summary", {})
+        mcp_test_count = max(1, mcp_summary.get("total_tools_tested", 0))
+        total_tests = base_tests + mcp_test_count
 
         # Calculate overall security score
         base_score = max(0, 100 - (leakage_count * 20))

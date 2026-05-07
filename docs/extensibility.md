@@ -34,7 +34,22 @@ MCP tools for security testing are defined in `evaluator/mcp_client.py`.
 2.  Update `MCPSecurityTester._assess_security_risk` if new risk categories are needed.
 3.  Add new test prompts to `test_tool_access_security`.
 
-## 4. Customizing HTML Reports
+## 4. Extending MCP Control-Plane Checks
+
+Control-plane behavior lives in focused modules:
+
+- `evaluator/mcp_inventory.py` parses MCP server declarations and flags risky
+  local startup or unapproved servers.
+- `evaluator/mcp_catalog.py` builds stable tool metadata snapshots and diffs
+  catalog drift.
+- `evaluator/mcp_policy.py` evaluates per-tool authorization, approval metadata,
+  token passthrough, and dangerous tool-call chains.
+
+Add new controls to the smallest matching module, then include the resulting
+findings in `MCPSecurityTester._collect_policy_findings` if they should appear
+in the report summary.
+
+## 5. Customizing HTML Reports
 
 The HTML reports use Jinja2 templates located in `app/templates/`.
 

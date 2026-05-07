@@ -112,20 +112,20 @@ templates = Jinja2Templates(directory=str(template_dir))
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     """Serve the live monitor as the home page."""
-    return templates.TemplateResponse("monitor.html", {"request": request})
+    return templates.TemplateResponse(request, "monitor.html")
 
 
 @app.get("/monitor", response_class=HTMLResponse)
 async def monitor_page(request: Request):
     """Serve the live monitor page."""
-    return templates.TemplateResponse("monitor.html", {"request": request})
+    return templates.TemplateResponse(request, "monitor.html")
 
 
 @app.get("/ui/reports", response_class=HTMLResponse)
 async def reports_page(request: Request):
     """Serve a historical reports browser (TBD)."""
     # For now, redirect or serve a simple list
-    return templates.TemplateResponse("monitor.html", {"request": request})  # Fallback to monitor
+    return templates.TemplateResponse(request, "monitor.html")
 
 
 def get_db_session():

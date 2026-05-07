@@ -8,11 +8,16 @@ import os
 import tempfile
 from unittest.mock import patch
 
-from evaluator.runner import SecurityEvaluator
-from evaluator.llm import LLMClient
-from evaluator.metrics import calculate_security_metrics, generate_security_report
-from app.database import create_db_and_tables, save_report_to_db
-from app.security.redaction import DataRedactor, redact, detect_sensitive_data
+os.environ.setdefault("EVALUATOR_DB_PATH", "/private/tmp/mcp_llm_security_evaluator_test.db")
+
+from evaluator.runner import SecurityEvaluator  # noqa: E402
+from evaluator.llm import LLMClient  # noqa: E402
+from evaluator.metrics import calculate_security_metrics, generate_security_report  # noqa: E402
+from evaluator.mcp_catalog import build_tool_catalog_snapshot, diff_tool_catalogs  # noqa: E402
+from evaluator.mcp_inventory import MCPInventoryScanner  # noqa: E402
+from evaluator.mcp_policy import MCPPolicy  # noqa: E402
+from app.database import create_db_and_tables, save_report_to_db  # noqa: E402
+from app.security.redaction import DataRedactor, redact, detect_sensitive_data  # noqa: E402
 
 # Ensure database is initialized for tests
 create_db_and_tables()
@@ -213,6 +218,107 @@ class TestReportGeneration:
         assert "overall_security_score" in report
         assert "recommendations" in report
         assert report["overall_security_score"] > 0
+
+
+class TestMCPControlPlane:
+    """Tests for MCP inventory, catalog, policy, and audit controls."""
+
+    def test_tool_catalog_diff_detects_metadata_changes(self):
+        previous = build_tool_catalog_snapshot(
+            [
+                {
+                    "name": "issue_read",
+                    "description": "Read issue status",
+                    "parameters": {"id": "string"},
+                    "source_server": "tracker",
+                }
+            ]
+        )
+        current = build_tool_catalog_snapshot(
+            [
+                {
+                    "name": "issue_read",
+                    "description": "Read and update issue status",
+                    "parameters": {"id": "string", "callback_url": "string"},
+                    "source_server": "tracker",
+                }
+            ]
+        )
+
+        diff = diff_tool_catalogs(previous, current)
+
+        assert diff["summary"]["changed"] == 1
+        assert "description" in diff["changed"][0]["fields_changed"]
+        assert "parameters" in diff["changed"][0]["fields_changed"]
+
+    def test_inventory_scanner_parses_mcp_servers(self):
+        scanner = MCPInventoryScanner()
+        records = scanner.from_config(
+            {
+                "mcp_servers": {
+                    "filesystem": {
+                        "command": "npx",
+                        "args": ["@modelcontextprotocol/server-filesystem@1.2.3"],
+                        "approved": True,
+                        "version": "1.2.3",
+                    }
+                }
+            }
+        )
+
+        assert len(records) == 1
+        assert records[0].name == "filesystem"
+        assert records[0].transport == "stdio"
+        assert records[0].approved is True
+
+    def test_policy_detects_sensitive_to_outbound_chain(self):
+        policy = MCPPolicy()
+        findings = policy.evaluate_tool_chain(
+            [
+                {
+                    "name": "database_query",
+                    "parameters": {"query": "SELECT password FROM users"},
+                },
+                {
+                    "name": "web_search",
+                    "parameters": {"query": "super_secret_password_123"},
+                },
+            ]
+        )
+
+        controls = {finding.control for finding in findings}
+        assert "runtime_chain_inspection" in controls
+        assert "token_passthrough" in controls
+
+    def test_report_includes_mcp_control_plane_fields(self):
+        report = generate_security_report(
+            {
+                "summary": {"total_tests": 1, "leakage_detected": 0, "security_score": 90},
+                "redaction_tests": [],
+                "repository_tests": [],
+                "mcp_tests": {
+                    "tool_tests": [],
+                    "stateful_tests": [],
+                    "privilege_escalation_test": {},
+                    "inventory": {"summary": {"total_servers": 1}, "servers": []},
+                    "catalog_snapshot": {"summary": {"total_tools": 1}},
+                    "catalog_diff": {"summary": {"added": 0, "removed": 0, "changed": 1}},
+                    "policy_findings": [{"severity": "medium", "control": "test"}],
+                    "audit_events": [{"event_id": "abc"}],
+                    "summary": {
+                        "mcp_security_score": 90,
+                        "catalog_changed": 1,
+                        "inventory_servers": 1,
+                    },
+                },
+            }
+        )
+
+        mcp_analysis = report["mcp_analysis"]
+        assert "inventory" in mcp_analysis
+        assert "catalog_diff" in mcp_analysis
+        assert "policy_findings" in mcp_analysis
+        assert "audit_events" in mcp_analysis
 
 
 class TestIntegration:

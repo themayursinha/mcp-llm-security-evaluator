@@ -1,8 +1,11 @@
 from typing import Optional
+import os
 
-from fastapi.testclient import TestClient
+os.environ.setdefault("EVALUATOR_DB_PATH", "/private/tmp/mcp_llm_security_evaluator_api_test.db")
 
-import app.api as api_module
+from fastapi.testclient import TestClient  # noqa: E402
+
+import app.api as api_module  # noqa: E402
 
 
 def test_health_endpoint():

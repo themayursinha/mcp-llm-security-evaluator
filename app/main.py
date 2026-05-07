@@ -69,6 +69,17 @@ def print_summary(report: dict):
         print(f"  High Risk Tools: {mcp_summary.get('high_risk_tools', 0)}")
         privilege_escalation = mcp_summary.get("privilege_escalation_detected", False)
         print(f"  Privilege Escalation: {'Yes' if privilege_escalation else 'No'}")
+        stateful_leak = mcp_summary.get("stateful_leakage_detected", False)
+        print(f"  Stateful Leakage: {'Yes' if stateful_leak else 'No'}")
+        print(f"  Policy Findings: {mcp_summary.get('policy_findings', 0)}")
+        print(
+            "  Catalog Drift: "
+            f"+{mcp_summary.get('catalog_added', 0)} "
+            f"-{mcp_summary.get('catalog_removed', 0)} "
+            f"~{mcp_summary.get('catalog_changed', 0)}"
+        )
+        print(f"  Inventory Servers: {mcp_summary.get('inventory_servers', 0)}")
+        print(f"  Audit Events: {mcp_summary.get('audit_events', 0)}")
         print(f"  MCP Security Score: {mcp_summary.get('mcp_security_score', 0):.1f}/100")
 
     print(f"\nOverall Security Score: {report.get('overall_security_score', 0):.1f}/100")

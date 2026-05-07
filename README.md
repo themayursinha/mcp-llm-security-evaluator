@@ -7,12 +7,19 @@ Security-focused tooling for testing how an LLM behaves when it is exposed to se
 - Redaction tests against synthetic secrets and PII.
 - Repository fixture scanning for leakage-style responses.
 - MCP tool-risk and privilege-escalation exercises.
+- MCP server inventory review from profile or MCP client config-style declarations.
+- MCP tool catalog snapshots and baseline diffing for metadata drift.
+- MCP policy checks for per-tool authorization, approval metadata, token passthrough,
+  and sensitive-to-outbound tool chains.
+- Redacted MCP audit events that preserve tool-call evidence for incident review.
 - FastAPI service for remote execution and report history.
 - SQLite-backed report history and response cache.
 
 ## What This Is
 - A practical evaluation toolkit for LLM security experiments.
-- A good fit for demos, CI smoke checks, and provider comparison work.
+- A companion implementation for MCP supply-chain and control-plane reviews.
+- A good fit for demos, CI smoke checks, provider comparison work, and early MCP
+  governance experiments.
 
 ## What This Is Not
 - A complete penetration-testing framework.
@@ -58,6 +65,10 @@ Common options:
 - `--server` starts the REST API instead of running a CLI evaluation.
 - `--no-cache` disables persistent LLM response caching.
 
+The `quick` profile is meant to stay CI-friendly. The broader `default` profile
+includes intentionally adversarial MCP control-plane scenarios, including a
+stateful exfiltration chain.
+
 ## API Usage
 Start the API server:
 
@@ -80,6 +91,8 @@ Optional API auth can be enabled with `API_AUTH_REQUIRED=true` and `API_KEY=...`
 - CLI runs write timestamped JSON and/or HTML reports to `reports/`.
 - API runs persist reports in `data/evaluator_history.db`.
 - The HTML report is designed for sharing results with non-developers.
+- MCP report sections include inventory, catalog drift, policy findings, stateful
+  tool-chain findings, and redacted audit events.
 
 ## Project Layout
 ```text

@@ -22,6 +22,9 @@ flowchart TB
     Redaction[Redaction app/security/redaction.py]
     RepoScan[Repository scan data/*]
     MCP[MCPSecurityTester evaluator/mcp_client.py]
+    Inventory[MCP inventory evaluator/mcp_inventory.py]
+    Catalog[MCP catalog diff evaluator/mcp_catalog.py]
+    Policy[MCP policy evaluator/mcp_policy.py]
     Metrics[evaluator/metrics.py]
   end
 
@@ -53,6 +56,9 @@ flowchart TB
   SE --> Redaction
   SE --> RepoScan
   SE --> MCP
+  MCP --> Inventory
+  MCP --> Catalog
+  MCP --> Policy
   SE --> Metrics
   SE --> LLMClient
   LLMClient --> Providers
@@ -144,3 +150,5 @@ erDiagram
 - Reports: `reports/*.json` and `reports/*.html`
 - History and cache: `data/evaluator_history.db` (SQLModel tables `EvaluationReport` and `LLMCache`)
 - Logs: `logs/` based on `app/logging_config.py`
+- MCP control plane: inline `mcp_servers`, `mcp_inventory_paths`,
+  `previous_tool_catalog`, and `mcp_policy` profile settings in `prompts.yaml`

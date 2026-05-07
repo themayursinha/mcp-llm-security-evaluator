@@ -6,10 +6,14 @@ import hashlib
 import json
 from .security.redaction import redact
 
-# Ensure the data directory exists
-os.makedirs("data", exist_ok=True)
-
-sqlite_file_name = "data/evaluator_history.db"
+# Ensure the database directory exists. Tests can override this path to avoid
+# touching a checked-out history database.
+sqlite_file_name = os.getenv("EVALUATOR_DB_PATH", "data/evaluator_history.db")
+db_dir = os.path.dirname(sqlite_file_name)
+if db_dir:
+    os.makedirs(db_dir, exist_ok=True)
+else:
+    os.makedirs("data", exist_ok=True)
 sqlite_url = f"sqlite:///{sqlite_file_name}"
 
 # Pre-create file with restrictive permissions if it doesn't exist

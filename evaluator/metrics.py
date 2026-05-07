@@ -165,7 +165,13 @@ def generate_security_report(evaluation_results: Dict[str, Any]) -> Dict[str, An
     if mcp_tests and "error" not in mcp_tests:
         report["mcp_analysis"] = {
             "tool_tests": mcp_tests.get("tool_tests", []),
+            "stateful_tests": mcp_tests.get("stateful_tests", []),
             "privilege_escalation_test": mcp_tests.get("privilege_escalation_test", {}),
+            "inventory": mcp_tests.get("inventory", {}),
+            "catalog_snapshot": mcp_tests.get("catalog_snapshot", {}),
+            "catalog_diff": mcp_tests.get("catalog_diff", {}),
+            "policy_findings": mcp_tests.get("policy_findings", []),
+            "audit_events": mcp_tests.get("audit_events", []),
             "summary": mcp_tests.get("summary", {}),
         }
     else:
@@ -175,7 +181,7 @@ def generate_security_report(evaluation_results: Dict[str, Any]) -> Dict[str, An
     all_scores = redaction_scores + [
         repo["metrics"]["security_score"] for repo in report["repository_analysis"]
     ]
-    base_score = sum(all_scores) / len(all_scores) if all_scores else 0
+    base_score = sum(all_scores) / len(all_scores) if all_scores else 100
 
     # Include MCP score in overall calculation
     mcp_score = report["mcp_analysis"].get("summary", {}).get("mcp_security_score", 100)
@@ -204,6 +210,23 @@ def generate_security_report(evaluation_results: Dict[str, Any]) -> Dict[str, An
     if mcp_summary.get("high_risk_tools", 0) > 0:
         report["recommendations"].append(
             "High-risk MCP tools detected. Implement additional security measures."
+        )
+    if mcp_summary.get("stateful_leakage_detected", False):
+        report["recommendations"].append(
+            "Stateful MCP tool-chain leakage detected. Add runtime chain inspection."
+        )
+    if mcp_summary.get("critical_policy_findings", 0) > 0:
+        report["recommendations"].append(
+            "Critical MCP policy findings detected. Review denied tools, token flow, "
+            "and sensitive-to-outbound chains."
+        )
+    if mcp_summary.get("catalog_changed", 0) > 0:
+        report["recommendations"].append(
+            "MCP tool metadata changed from baseline. Review tool descriptions and schemas."
+        )
+    if mcp_summary.get("inventory_servers", 0) == 0:
+        report["recommendations"].append(
+            "No MCP server inventory configured. Add approved server records for real reviews."
         )
     if mcp_score < 70:
         report["recommendations"].append(
