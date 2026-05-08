@@ -1,19 +1,19 @@
 # MCP LLM Security Evaluator
 
-Security-focused tooling for testing how an LLM behaves when it is exposed to sensitive text, repository content, and MCP-style tool access. The project can run local smoke tests with a deterministic mock provider or connect to real providers for deeper evaluation.
+Security focused tooling for testing how an LLM behaves when it is exposed to sensitive text, repository content, and MCP style tool access. The project can run local smoke tests with a deterministic mock provider or connect to real providers for deeper evaluation.
 
 ## What Works Today
 - CLI evaluation flow with JSON and HTML reports.
 - Redaction tests against synthetic secrets and PII.
-- Repository fixture scanning for leakage-style responses.
-- MCP tool-risk and privilege-escalation exercises.
+- Repository fixture scanning for leakage style responses.
+- MCP tool risk and privilege escalation exercises.
 - MCP server inventory review from profile or MCP client config-style declarations.
 - MCP tool catalog snapshots and baseline diffing for metadata drift.
 - MCP policy checks for per-tool authorization, approval metadata, token passthrough,
   and sensitive-to-outbound tool chains.
 - Redacted MCP audit events that preserve tool-call evidence for incident review.
 - FastAPI service for remote execution and report history.
-- SQLite-backed report history and response cache.
+- SQLite backed report history and response cache.
 
 ## What This Is
 - A practical evaluation toolkit for LLM security experiments.
