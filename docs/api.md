@@ -74,6 +74,10 @@ Return historical overall and MCP scores.
 ### `GET /monitor`
 Serve the built-in monitoring UI.
 
+### `GET /ui/reports`
+Serve the historical report browser with recent runs, score trends, and a JSON
+detail view for selected reports.
+
 ### `WS /ws/events`
 Broadcast progress and completion events to the monitor UI.
 

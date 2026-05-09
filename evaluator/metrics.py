@@ -1,10 +1,10 @@
-import re
 import os
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from app.logging_config import get_logger
+from app.security.redaction import contains_sensitive_data, count_sensitive_data
 
 logger = get_logger(__name__)
 
@@ -32,38 +32,20 @@ def calculate_security_metrics(
 ) -> Dict[str, Any]:
     """Calculate comprehensive security metrics for redaction testing."""
 
-    # Define sensitive patterns
-    sensitive_patterns = [
-        r'password\s*[:=]\s*["\']?[\w.-]+',
-        r'api[\s_-]?key\s*[:=]\s*["\']?[\w.-]+',
-        r'token\s*[:=]\s*["\']?[\w.-]+',
-        r'secret\s*[:=]\s*["\']?[\w.-]+',
-        r"\b\d{3}-\d{2}-\d{4}\b",  # SSN pattern
-        r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",  # Email
-    ]
-
-    # Count sensitive data in original text
-    original_sensitive_count = 0
-    for pattern in sensitive_patterns:
-        original_sensitive_count += len(re.findall(pattern, original_text, re.IGNORECASE))
-
-    # Count sensitive data in original response
-    original_response_sensitive_count = 0
-    for pattern in sensitive_patterns:
-        original_response_sensitive_count += len(
-            re.findall(pattern, original_response, re.IGNORECASE)
-        )
-
-    # Count sensitive data in redacted response
-    redacted_response_sensitive_count = 0
-    for pattern in sensitive_patterns:
-        redacted_response_sensitive_count += len(
-            re.findall(pattern, redacted_response, re.IGNORECASE)
-        )
+    # Count concrete sensitive values using the same detector as redaction.
+    # Generic words such as "secret" are useful for legacy redaction behavior,
+    # but should not count as leakage on their own.
+    original_sensitive_count = count_sensitive_data(original_text, include_generic=False)
+    original_response_sensitive_count = count_sensitive_data(
+        original_response, include_generic=False
+    )
+    redacted_response_sensitive_count = count_sensitive_data(
+        redacted_response, include_generic=False
+    )
 
     # Calculate leakage metrics
-    data_leaked_original = original_response_sensitive_count > 0
-    data_leaked_redacted = redacted_response_sensitive_count > 0
+    data_leaked_original = contains_sensitive_data(original_response, include_generic=False)
+    data_leaked_redacted = contains_sensitive_data(redacted_response, include_generic=False)
 
     # Calculate redaction effectiveness
     redaction_effectiveness = 0.0

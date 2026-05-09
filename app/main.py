@@ -12,18 +12,23 @@ from datetime import datetime
 
 from evaluator.runner import SecurityEvaluator
 from evaluator.metrics import generate_security_report, generate_html_report
+from evaluator.comparison import (
+    generate_comparison_html_report,
+    parse_provider_list,
+    run_provider_comparison,
+)
 from app.config import Config
 from app.logging_config import setup_logging, get_logger
 
 logger = get_logger(__name__)
 
 
-def save_report(report: dict, output_dir: str = "reports") -> str:
+def save_report(report: dict, output_dir: str = "reports", prefix: str = "security_report") -> str:
     """Save security report to file."""
     os.makedirs(output_dir, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_file = os.path.join(output_dir, f"security_report_{timestamp}.json")
+    report_file = os.path.join(output_dir, f"{prefix}_{timestamp}.json")
 
     with open(report_file, "w") as f:
         json.dump(report, f, indent=2)
@@ -93,6 +98,25 @@ def print_summary(report: dict):
     print("=" * 60)
 
 
+def print_comparison_summary(comparison_report: dict):
+    """Print provider comparison summary to console."""
+    print("\n" + "=" * 60)
+    print("MCP LLM PROVIDER COMPARISON")
+    print("=" * 60)
+    print(f"Profile: {comparison_report.get('profile', 'unknown')}")
+
+    for rank, item in enumerate(comparison_report.get("comparison_summary", []), 1):
+        print(
+            f"{rank}. {item.get('resolved_provider', item.get('provider'))}: "
+            f"overall {item.get('overall_security_score', 0):.1f}/100, "
+            f"MCP {item.get('mcp_security_score', 0):.1f}/100, "
+            f"leakage {item.get('leakage_detected', 0)}, "
+            f"{item.get('total_tests', 0)} tests"
+        )
+
+    print("=" * 60)
+
+
 def main():
     """Main application entry point."""
     parser = argparse.ArgumentParser(
@@ -134,6 +158,13 @@ def main():
     )
     parser.add_argument("--base-url", help="Base URL for local LLM providers (e.g., for Ollama)")
     parser.add_argument("--no-cache", action="store_true", help="Disable LLM response caching")
+    parser.add_argument(
+        "--compare-providers",
+        help=(
+            "Comma-separated providers to evaluate with the same profile "
+            "(for example: mock,ollama)"
+        ),
+    )
     parser.add_argument(
         "--format",
         choices=["json", "html", "both"],
@@ -182,6 +213,51 @@ def main():
         profile = args.profile
         if args.quick:
             profile = "quick"
+
+        if args.compare_providers:
+            providers = parse_provider_list(args.compare_providers)
+            for provider in providers:
+                is_valid, error_msg = Config.validate(provider)
+                if not is_valid:
+                    logger.error(f"Configuration Error for {provider}: {error_msg}")
+                    sys.exit(1)
+
+            print(f"Running provider comparison for: {', '.join(providers)}")
+            comparison_report = run_provider_comparison(
+                providers=providers,
+                config_path=args.config,
+                profile=profile,
+                llm_kwargs=llm_kwargs,
+            )
+
+            if args.format in ["json", "both"]:
+                json_file = save_report(
+                    comparison_report,
+                    args.output_dir,
+                    prefix="provider_comparison",
+                )
+                print(f"JSON comparison report saved to: {json_file}")
+
+            if args.format in ["html", "both"]:
+                html_file = generate_comparison_html_report(comparison_report, args.output_dir)
+                print(f"HTML comparison report saved to: {html_file}")
+
+            print_comparison_summary(comparison_report)
+
+            worst_score = min(
+                (
+                    item.get("overall_security_score", 0)
+                    for item in comparison_report.get("comparison_summary", [])
+                ),
+                default=0,
+            )
+            if worst_score < Config.SECURITY_THRESHOLD:
+                print(
+                    f"\nSecurity comparison failed threshold "
+                    f"({Config.SECURITY_THRESHOLD}). Lowest score: {worst_score:.1f}"
+                )
+                sys.exit(1)
+            sys.exit(0)
 
         # Initialize evaluator
         evaluator = SecurityEvaluator(

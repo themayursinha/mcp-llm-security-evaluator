@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+
+{% block title %}Report History - MCP LLM{% endblock %}
+
+{% block extra_css %}
+<style>
+    .metric-strip {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+    }
+
+    .metric-value {
+        font-size: 1.4rem;
+        font-weight: 700;
+    }
+
+    .report-json {
+        max-height: 520px;
+        overflow: auto;
+        font-size: 0.85rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1">Report History</h1>
+        <p class="text-muted mb-0">Browse persisted evaluation results and score trends.</p>
+    </div>
+    <a class="btn btn-outline-primary" href="/monitor">
+        <i class="fas fa-satellite-dish"></i> Live Monitor
+    </a>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-clock-rotate-left me-2"></i> Recent Reports</span>
+                <button id="refresh-reports" class="btn btn-sm btn-outline-light">
+                    <i class="fas fa-rotate"></i>
+                </button>
+            </div>
+            <div class="list-group list-group-flush" id="report-list">
+                <div class="list-group-item text-muted">Loading reports...</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="card shadow-sm">
+            <div class="card-header bg-info text-white">
+                <i class="fas fa-chart-line me-2"></i> Score Trend
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="trend-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white">
+                <i class="fas fa-file-shield me-2"></i> Selected Report
+            </div>
+            <div class="card-body">
+                <div id="report-empty" class="text-muted">Select a report to inspect its summary.</div>
+                <div id="report-detail" class="d-none">
+                    <div class="metric-strip mb-3">
+                        <div>
+                            <div class="text-muted small text-uppercase">Overall</div>
+                            <div class="metric-value" id="detail-overall">-</div>
+                        </div>
+                        <div>
+                            <div class="text-muted small text-uppercase">MCP</div>
+                            <div class="metric-value" id="detail-mcp">-</div>
+                        </div>
+                        <div>
+                            <div class="text-muted small text-uppercase">Tests</div>
+                            <div class="metric-value" id="detail-tests">-</div>
+                        </div>
+                        <div>
+                            <div class="text-muted small text-uppercase">Leakage</div>
+                            <div class="metric-value" id="detail-leakage">-</div>
+                        </div>
+                    </div>
+                    <h2 class="h6">Recommendations</h2>
+                    <ul id="detail-recommendations" class="mb-3"></ul>
+                    <details>
+                        <summary class="mb-2">Raw JSON</summary>
+                        <pre id="detail-json" class="report-json bg-light border rounded p-3"></pre>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const reportList = document.getElementById('report-list');
+    const refreshButton = document.getElementById('refresh-reports');
+    const detailEmpty = document.getElementById('report-empty');
+    const detailPanel = document.getElementById('report-detail');
+    const detailOverall = document.getElementById('detail-overall');
+    const detailMcp = document.getElementById('detail-mcp');
+    const detailTests = document.getElementById('detail-tests');
+    const detailLeakage = document.getElementById('detail-leakage');
+    const detailRecommendations = document.getElementById('detail-recommendations');
+    const detailJson = document.getElementById('detail-json');
+    let trendChart = null;
+
+    function formatScore(score) {
+        return Number(score || 0).toFixed(1);
+    }
+
+    function renderReportList(reports) {
+        reportList.innerHTML = '';
+        if (!reports.length) {
+            reportList.innerHTML = '<div class="list-group-item text-muted">No reports saved yet.</div>';
+            return;
+        }
+
+        reports.forEach((report) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'list-group-item list-group-item-action';
+
+            const heading = document.createElement('div');
+            heading.className = 'd-flex justify-content-between';
+
+            const title = document.createElement('strong');
+            title.textContent = `Report #${report.id}`;
+            heading.appendChild(title);
+
+            const score = document.createElement('span');
+            score.className = 'badge bg-primary';
+            score.textContent = formatScore(report.overall_security_score);
+            heading.appendChild(score);
+
+            const timestamp = document.createElement('div');
+            timestamp.className = 'small text-muted';
+            timestamp.textContent = new Date(report.timestamp).toLocaleString();
+
+            const metadata = document.createElement('div');
+            metadata.className = 'small';
+            metadata.textContent = `Provider: ${report.provider || 'unknown'} | Status: ${report.status}`;
+
+            button.appendChild(heading);
+            button.appendChild(timestamp);
+            button.appendChild(metadata);
+            button.addEventListener('click', () => loadReport(report.id));
+            reportList.appendChild(button);
+        });
+    }
+
+    function renderTrend(rows) {
+        const labels = rows.map((row) => new Date(row.timestamp).toLocaleString());
+        const overall = rows.map((row) => row.overall_score);
+        const mcp = rows.map((row) => row.mcp_score);
+
+        if (trendChart) {
+            trendChart.destroy();
+        }
+
+        trendChart = new Chart(document.getElementById('trend-chart'), {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: 'Overall',
+                        data: overall,
+                        borderColor: '#0d6efd',
+                        backgroundColor: 'rgba(13, 110, 253, 0.12)',
+                        tension: 0.2
+                    },
+                    {
+                        label: 'MCP',
+                        data: mcp,
+                        borderColor: '#198754',
+                        backgroundColor: 'rgba(25, 135, 84, 0.12)',
+                        tension: 0.2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        min: 0,
+                        max: 100
+                    }
+                }
+            }
+        });
+    }
+
+    function renderReport(report) {
+        const summary = report.evaluation_summary || {};
+        detailEmpty.classList.add('d-none');
+        detailPanel.classList.remove('d-none');
+        detailOverall.textContent = formatScore(report.overall_security_score);
+        detailMcp.textContent = formatScore(summary.mcp_security_score);
+        detailTests.textContent = summary.total_tests || 0;
+        detailLeakage.textContent = summary.leakage_detected || 0;
+
+        detailRecommendations.innerHTML = '';
+        const recommendations = report.recommendations || [];
+        if (!recommendations.length) {
+            detailRecommendations.innerHTML = '<li class="text-muted">No recommendations.</li>';
+        } else {
+            recommendations.forEach((recommendation) => {
+                const item = document.createElement('li');
+                item.textContent = recommendation;
+                detailRecommendations.appendChild(item);
+            });
+        }
+        detailJson.textContent = JSON.stringify(report, null, 2);
+    }
+
+    async function loadReports() {
+        const [reportsResponse, trendsResponse] = await Promise.all([
+            fetch('/reports?limit=50'),
+            fetch('/trends?limit=50')
+        ]);
+        renderReportList(await reportsResponse.json());
+        renderTrend(await trendsResponse.json());
+
+        const requestedReport = new URLSearchParams(window.location.search).get('report_id');
+        if (requestedReport) {
+            loadReport(requestedReport);
+        }
+    }
+
+    async function loadReport(reportId) {
+        const response = await fetch(`/reports/${reportId}`);
+        if (!response.ok) {
+            return;
+        }
+        const report = await response.json();
+        renderReport(report);
+        history.replaceState(null, '', `/ui/reports?report_id=${reportId}`);
+    }
+
+    refreshButton.addEventListener('click', loadReports);
+    loadReports();
+</script>
+{% endblock %}

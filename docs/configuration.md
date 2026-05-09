@@ -79,6 +79,35 @@ previous_tool_catalog:
         database: "string"
 ```
 
+### Configured tools
+Profiles can declare tools directly with `mcp_tools`, or attach tools to
+`mcp_servers`. Configured tools are added to the current catalog before policy,
+catalog-drift, and tool-access checks run.
+
+```yaml
+mcp_tools:
+  - name: "crm_lookup"
+    description: "Read customer CRM records"
+    parameters:
+      customer_id: "string"
+
+mcp_servers:
+  ticketing:
+    command: "npx"
+    args:
+      - "@example/ticketing-mcp@1.0.0"
+    approved: true
+    tools:
+      - name: "ticket_update"
+        description: "Update support ticket status"
+        parameters:
+          ticket_id: "string"
+          status: "string"
+```
+
+Set `include_sample_tools: false` on a profile when you only want configured
+tools in the MCP catalog.
+
 ### Policy checks
 Use `mcp_policy` to express coarse-grained controls for the evaluator.
 
@@ -107,6 +136,7 @@ Examples:
 python -m app.main --provider mock --format html
 python -m app.main --provider ollama --model llama3 --base-url http://localhost:11434
 python -m app.main --quick --no-cache
+python -m app.main --quick --compare-providers mock,ollama --format both
 ```
 
 ## Caching and Persistence

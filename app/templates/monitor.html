@@ -173,8 +173,7 @@
         line.appendChild(document.createTextNode('Full Report: '));
 
         const link = document.createElement('a');
-        link.href = `/reports/${reportId}`;
-        link.target = '_blank';
+        link.href = `/ui/reports?report_id=${reportId}`;
         link.className = 'text-info';
         link.textContent = `Report #${reportId}`;
         line.appendChild(link);

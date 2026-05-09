@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Provider Comparison - MCP LLM{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="h3 mb-1">Provider Comparison</h1>
+        <p class="text-muted mb-0">Profile: {{ comparison.profile }} | Generated: {{ comparison.generated_at }}</p>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-dark text-white">
+        <i class="fas fa-scale-balanced me-2"></i> Security Ranking
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Provider</th>
+                        <th>Overall</th>
+                        <th>Base</th>
+                        <th>MCP</th>
+                        <th>Leakage</th>
+                        <th>Tests</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in summary %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>
+                            <strong>{{ item.resolved_provider }}</strong>
+                            {% if item.is_mock %}
+                            <span class="badge bg-secondary ms-2">mock</span>
+                            {% endif %}
+                        </td>
+                        <td><span class="badge bg-primary">{{ "%.1f"|format(item.overall_security_score) }}</span></td>
+                        <td>{{ "%.1f"|format(item.security_score) }}</td>
+                        <td>{{ "%.1f"|format(item.mcp_security_score) }}</td>
+                        <td>{{ item.leakage_detected }}</td>
+                        <td>{{ item.total_tests }}</td>
+                        <td>{{ "%.2f"|format(item.execution_time) }}s</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-info text-white">
+        <i class="fas fa-chart-line me-2"></i> Score Breakdown
+    </div>
+    <div class="card-body">
+        <div class="chart-container">
+            <canvas id="comparisonChart"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block timestamp %}{{ timestamp }}{% endblock %}
+
+{% block extra_js %}
+<script>
+    const comparisonRows = {{ summary | tojson }};
+    const labels = comparisonRows.map((row) => row.resolved_provider);
+    const overallScores = comparisonRows.map((row) => row.overall_security_score);
+    const mcpScores = comparisonRows.map((row) => row.mcp_security_score);
+
+    new Chart(document.getElementById('comparisonChart'), {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Overall Score',
+                    data: overallScores,
+                    backgroundColor: 'rgba(13, 110, 253, 0.7)'
+                },
+                {
+                    label: 'MCP Score',
+                    data: mcpScores,
+                    backgroundColor: 'rgba(25, 135, 84, 0.7)'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    min: 0,
+                    max: 100
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

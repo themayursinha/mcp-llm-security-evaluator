@@ -218,6 +218,11 @@ class LLMClient:
 
     def __init__(self, provider: str = "auto", **kwargs):
         self.provider_name = provider
+        self.default_generate_kwargs = {
+            key: kwargs.pop(key)
+            for key in ["max_tokens", "temperature", "use_cache"]
+            if key in kwargs
+        }
         self.kwargs = kwargs
         self._provider = None
         self._initialize_provider()
@@ -249,20 +254,21 @@ class LLMClient:
         if self._provider is None:
             raise RuntimeError("Provider not initialized")
 
-        use_cache = kwargs.get("use_cache", True) and not self.is_mock()
+        generate_kwargs = {**self.default_generate_kwargs, **kwargs}
+        use_cache = generate_kwargs.get("use_cache", True) and not self.is_mock()
         provider_name = self.get_provider_name()
         model_name = getattr(self._provider, "model", "default")
 
         if use_cache:
-            cached = get_cached_response(provider_name, model_name, prompt, kwargs)
+            cached = get_cached_response(provider_name, model_name, prompt, generate_kwargs)
             if cached:
                 logger.debug(f"Cache hit for {provider_name}")
                 return cached
 
-        response = await self._provider.generate(prompt, **kwargs)
+        response = await self._provider.generate(prompt, **generate_kwargs)
 
         if use_cache and response:
-            save_to_cache(provider_name, model_name, prompt, response, kwargs)
+            save_to_cache(provider_name, model_name, prompt, response, generate_kwargs)
 
         return response
 

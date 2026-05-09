@@ -245,11 +245,17 @@ class MCPSecurityTester:
 
     def add_tool(self, tool: MCPTool) -> None:
         """Add an MCP tool for testing."""
+        tool_key = (tool.source_server, tool.name)
+        self.tools = [
+            existing
+            for existing in self.tools
+            if (existing.source_server, existing.name) != tool_key
+        ]
         self.tools.append(tool)
 
     def add_tools_from_config(self, config: Dict[str, Any]) -> None:
         """Add tools from configuration."""
-        for tool_config in config.get("tools", []):
+        for tool_config in self._iter_tool_configs(config):
             tool = MCPTool(
                 name=tool_config["name"],
                 description=tool_config.get("description", ""),
@@ -259,6 +265,58 @@ class MCPSecurityTester:
                 source_server=tool_config.get("source_server", "builtin-sample"),
             )
             self.add_tool(tool)
+
+    def configure_tools(
+        self, config: Dict[str, Any], include_samples: Optional[bool] = None
+    ) -> None:
+        """Reset the tool catalog from built-in samples plus configured tools."""
+        if include_samples is None:
+            include_samples = config.get("include_sample_tools", True)
+
+        self.tools = []
+        if include_samples:
+            self.add_tools_from_config({"tools": SAMPLE_MCP_TOOLS})
+        self.add_tools_from_config(config)
+
+    def _iter_tool_configs(self, config: Dict[str, Any]) -> List[Dict[str, Any]]:
+        tools: List[Dict[str, Any]] = []
+        for key in ("tools", "mcp_tools"):
+            configured_tools = config.get(key, [])
+            if isinstance(configured_tools, list):
+                tools.extend(
+                    tool for tool in configured_tools if isinstance(tool, dict) and tool.get("name")
+                )
+
+        mcp_servers = config.get("mcp_servers", {})
+        if isinstance(mcp_servers, dict):
+            for server_name, server_config in mcp_servers.items():
+                if isinstance(server_config, dict):
+                    tools.extend(self._tools_from_server(server_name, server_config))
+
+        server_list = config.get("mcp_server_list", [])
+        if isinstance(server_list, list):
+            for index, server_config in enumerate(server_list):
+                if isinstance(server_config, dict):
+                    server_name = server_config.get("name") or f"server-{index + 1}"
+                    tools.extend(self._tools_from_server(server_name, server_config))
+
+        return tools
+
+    def _tools_from_server(
+        self, server_name: str, server_config: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        configured_tools = server_config.get("tools", [])
+        if not isinstance(configured_tools, list):
+            return []
+
+        tools = []
+        for tool in configured_tools:
+            if not isinstance(tool, dict) or not tool.get("name"):
+                continue
+            normalized_tool = dict(tool)
+            normalized_tool.setdefault("source_server", server_name)
+            tools.append(normalized_tool)
+        return tools
 
     async def test_tool_access_security(self, llm_client: Any, tool: MCPTool) -> Dict[str, Any]:
         """Test security implications of LLM accessing a specific tool."""
@@ -420,6 +478,7 @@ class MCPSecurityTester:
         logger.info("Starting MCP security tests")
         config = config or {}
         self.policy = MCPPolicy.from_config(config.get("mcp_policy", {}))
+        self.configure_tools(config)
 
         results: Dict[str, Any] = {
             "tool_tests": [],

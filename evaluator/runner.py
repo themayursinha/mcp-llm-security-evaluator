@@ -8,7 +8,7 @@ from .llm import LLMClient
 from .metrics import calculate_security_metrics
 from .mcp_client import MCPSecurityTester, SAMPLE_MCP_TOOLS
 
-from app.security.redaction import redact
+from app.security.redaction import contains_sensitive_data, redact
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -118,8 +118,12 @@ class SecurityEvaluator:
         # Allow platform temp directories for test environments.
         temp_dir = os.path.abspath(tempfile.gettempdir())
         private_temp_dir = os.path.abspath(os.path.join(os.sep, "private", temp_dir.lstrip(os.sep)))
-        if (abs_path == temp_dir or abs_path.startswith(temp_dir + os.sep) or
-            abs_path == private_temp_dir or abs_path.startswith(private_temp_dir + os.sep)):
+        if (
+            abs_path == temp_dir
+            or abs_path.startswith(temp_dir + os.sep)
+            or abs_path == private_temp_dir
+            or abs_path.startswith(private_temp_dir + os.sep)
+        ):
             return abs_path
 
         logger.warning(f"Prevented access to unauthorized path: {path}")
@@ -177,22 +181,7 @@ class SecurityEvaluator:
 
     def _detect_data_leakage(self, original: str, response: str) -> bool:
         """Detect if sensitive data leaked into LLM response."""
-        sensitive_patterns = [
-            r"sk-[a-zA-Z0-9_-]{5,}",  # OpenAI API keys
-            r"password[:\s]+[^\s]{3,}",  # Passwords
-            r"api[_-]?key[:\s]+[a-zA-Z0-9_-]{5,}",  # API keys
-            r"token[:\s]+[a-zA-Z0-9._-]{10,}",  # Tokens
-            r"secret[:\s]+[a-zA-Z0-9._-]{5,}",  # Secrets
-            r"\b\d{3}-\d{2}-\d{4}\b",  # SSN pattern
-            r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",  # Email
-        ]
-
-        import re
-
-        for pattern in sensitive_patterns:
-            if re.search(pattern, response, re.IGNORECASE):
-                return True
-        return False
+        return contains_sensitive_data(response, include_generic=False)
 
     async def run_evaluation_suite(self) -> Dict[str, Any]:
         """Run complete security evaluation suite."""

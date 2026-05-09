@@ -5,6 +5,7 @@ from fastapi import (
     Depends,
     HTTPException,
     BackgroundTasks,
+    Query,
     WebSocket,
     WebSocketDisconnect,
     Request,
@@ -52,7 +53,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; "
+            "script-src 'self' 'unsafe-inline' "
+            "https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; "
             "style-src 'self' 'unsafe-inline' "
             "https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; "
             "font-src 'self' https://cdnjs.cloudflare.com; "
@@ -123,9 +125,8 @@ async def monitor_page(request: Request):
 
 @app.get("/ui/reports", response_class=HTMLResponse)
 async def reports_page(request: Request):
-    """Serve a historical reports browser (TBD)."""
-    # For now, redirect or serve a simple list
-    return templates.TemplateResponse(request, "monitor.html")
+    """Serve a historical reports browser."""
+    return templates.TemplateResponse(request, "reports.html")
 
 
 def get_db_session():
@@ -247,7 +248,11 @@ async def trigger_evaluation(
 
 
 @app.get("/reports", response_model=List[dict])
-def list_reports(offset: int = 0, limit: int = 100, session: Session = Depends(get_db_session)):
+def list_reports(
+    offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    session: Session = Depends(get_db_session),
+):
     """List all historical evaluation reports (summary only)."""
     statement = (
         select(  # type: ignore
@@ -290,7 +295,10 @@ def get_report(report_id: int, session: Session = Depends(get_db_session)):
 
 
 @app.get("/trends")
-def get_trends(limit: int = 10, session: Session = Depends(get_db_session)):
+def get_trends(
+    limit: int = Query(10, ge=1, le=100),
+    session: Session = Depends(get_db_session),
+):
     """Get historical security score trends."""
     statement = (
         select(  # type: ignore
@@ -298,9 +306,11 @@ def get_trends(limit: int = 10, session: Session = Depends(get_db_session)):
             col(EvaluationReport.overall_security_score),
             col(EvaluationReport.mcp_security_score),
         )
-        .order_by(col(EvaluationReport.timestamp).asc())
+        .order_by(col(EvaluationReport.timestamp).desc())
         .limit(limit)
     )
 
     results = session.exec(statement).all()
-    return [{"timestamp": r[0], "overall_score": r[1], "mcp_score": r[2]} for r in results]
+    return [
+        {"timestamp": r[0], "overall_score": r[1], "mcp_score": r[2]} for r in reversed(results)
+    ]

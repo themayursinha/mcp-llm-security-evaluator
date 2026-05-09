@@ -14,6 +14,8 @@ Security-focused tooling for testing how an LLM behaves when it is exposed to se
 - Redacted MCP audit events that preserve tool-call evidence for incident review.
 - FastAPI service for remote execution and report history.
 - SQLite-backed report history and response cache.
+- Historical report browser with score trends.
+- Provider comparison mode for running one profile across multiple backends.
 
 ## What This Is
 - A practical evaluation toolkit for LLM security experiments.
@@ -62,6 +64,7 @@ Common options:
 - `--quick` uses the `quick` profile and skips repository scans.
 - `--format {json,html,both}` controls report output.
 - `--provider {auto,openai,anthropic,ollama,mock}` selects the LLM backend.
+- `--compare-providers mock,ollama` runs the selected profile against multiple providers.
 - `--server` starts the REST API instead of running a CLI evaluation.
 - `--no-cache` disables persistent LLM response caching.
 
@@ -91,8 +94,17 @@ Optional API auth can be enabled with `API_AUTH_REQUIRED=true` and `API_KEY=...`
 - CLI runs write timestamped JSON and/or HTML reports to `reports/`.
 - API runs persist reports in `data/evaluator_history.db`.
 - The HTML report is designed for sharing results with non-developers.
+- The API includes a report history UI at `/ui/reports`.
 - MCP report sections include inventory, catalog drift, policy findings, stateful
   tool-chain findings, and redacted audit events.
+
+## Provider Comparison
+Use comparison mode to evaluate the same profile across providers and produce a
+ranked JSON/HTML comparison report.
+
+```bash
+python -m app.main --quick --compare-providers mock,ollama --format both
+```
 
 ## Project Layout
 ```text

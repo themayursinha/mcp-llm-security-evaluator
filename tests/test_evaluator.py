@@ -12,12 +12,20 @@ os.environ.setdefault("EVALUATOR_DB_PATH", "/private/tmp/mcp_llm_security_evalua
 
 from evaluator.runner import SecurityEvaluator  # noqa: E402
 from evaluator.llm import LLMClient  # noqa: E402
+from evaluator.comparison import parse_provider_list, run_provider_comparison  # noqa: E402
 from evaluator.metrics import calculate_security_metrics, generate_security_report  # noqa: E402
 from evaluator.mcp_catalog import build_tool_catalog_snapshot, diff_tool_catalogs  # noqa: E402
+from evaluator.mcp_client import MCPSecurityTester  # noqa: E402
 from evaluator.mcp_inventory import MCPInventoryScanner  # noqa: E402
 from evaluator.mcp_policy import MCPPolicy  # noqa: E402
 from app.database import create_db_and_tables, save_report_to_db  # noqa: E402
-from app.security.redaction import DataRedactor, redact, detect_sensitive_data  # noqa: E402
+from app.security.redaction import (  # noqa: E402
+    DataRedactor,
+    contains_sensitive_data,
+    detect_sensitive_data,
+    find_sensitive_data,
+    redact,
+)
 
 # Ensure database is initialized for tests
 create_db_and_tables()
@@ -58,6 +66,34 @@ class TestDataRedactor:
         assert "password" in detected
         assert len(detected["api_key"]) > 0
         assert len(detected["password"]) > 0
+
+    def test_detects_modern_token_formats(self):
+        """Test detection of common real-world token shapes."""
+        aws_key = "AK" + "IA" + "IOSFODNN7EXAMPLE"
+        github_token = "gh" + "p_" + "1234567890abcdefghijklmnop"
+        slack_token = "xo" + "xb" + "-123456789012-123456789012-abcdefghijklmnop"
+        jwt_token = (
+            "eyJ" + "hbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+            "eyJ" + "zdWIiOiIxMjM0NTY3ODkwIn0.signaturetoken"
+        )
+        text = (
+            f"aws={aws_key} " f"github={github_token} " f"slack={slack_token} " f"jwt={jwt_token}"
+        )
+
+        categories = {finding["category"] for finding in find_sensitive_data(text)}
+
+        assert "aws_access_key" in categories
+        assert "github_token" in categories
+        assert "slack_token" in categories
+        assert "jwt" in categories
+
+    def test_generic_secret_word_does_not_count_as_leakage(self):
+        """Generic security prose should not be treated as a concrete leak."""
+        text = "The secret rotation policy is documented."
+
+        assert "[REDACTED_SECRET]" in redact(text)
+        assert contains_sensitive_data(text) is True
+        assert contains_sensitive_data(text, include_generic=False) is False
 
     def test_redaction_stats(self):
         """Test redaction statistics calculation."""
@@ -155,6 +191,10 @@ class TestSecurityEvaluator:
         # Test without leakage
         response_clean = "I see there's an API key but it's redacted"
         assert evaluator._detect_data_leakage(original, response_clean) is False
+
+        # Generic security wording should not count as a leaked value.
+        response_generic = "I found a secret reference but no raw value."
+        assert evaluator._detect_data_leakage(original, response_generic) is False
 
     def test_quick_profile_skips_repository_tests(self):
         """Quick profile should not silently fall back to repository scans."""
@@ -320,6 +360,38 @@ class TestMCPControlPlane:
         assert "policy_findings" in mcp_analysis
         assert "audit_events" in mcp_analysis
 
+    def test_mcp_tester_adds_profile_and_server_tools(self):
+        tester = MCPSecurityTester()
+        tester.configure_tools(
+            {
+                "include_sample_tools": False,
+                "mcp_tools": [
+                    {
+                        "name": "crm_lookup",
+                        "description": "Read customer CRM records",
+                        "parameters": {"customer_id": "string"},
+                    }
+                ],
+                "mcp_servers": {
+                    "ticketing": {
+                        "tools": [
+                            {
+                                "name": "ticket_update",
+                                "description": "Update support ticket status",
+                                "parameters": {"ticket_id": "string", "status": "string"},
+                            }
+                        ]
+                    }
+                },
+            }
+        )
+
+        tool_names = {tool.name for tool in tester.tools}
+        server_names = {tool.source_server for tool in tester.tools}
+
+        assert tool_names == {"crm_lookup", "ticket_update"}
+        assert "ticketing" in server_names
+
 
 class TestIntegration:
     """Integration tests."""
@@ -395,6 +467,24 @@ class TestPersistence:
         assert db_report.mcp_security_score == 90.0
         assert db_report.total_tests == 4
         assert db_report.provider == "mock"
+
+
+class TestProviderComparison:
+    """Provider comparison tests."""
+
+    def test_parse_provider_list(self):
+        assert parse_provider_list("mock, ollama") == ["mock", "ollama"]
+
+    def test_provider_comparison_with_mock(self):
+        report = run_provider_comparison(
+            providers=["mock"],
+            profile="quick",
+            llm_kwargs={"delay": 0},
+        )
+
+        assert report["profile"] == "quick"
+        assert report["comparison_summary"][0]["provider"] == "mock"
+        assert "mock" in report["reports"]
 
 
 def test_smoke():
