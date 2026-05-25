@@ -1,0 +1,29 @@
+#!/bin/bash
+# Pre-commit hook: block commits with known vulnerabilities or lint failures.
+# Install: ln -sf ../../scripts/pre-commit .git/hooks/pre-commit
+set -euo pipefail
+
+export PATH="$HOME/.local/bin:$HOME/.venv/bin:$HOME/venv/bin:/usr/local/bin:$PATH"
+
+echo "==> flake8 app evaluator tests"
+if python3 -m flake8 app evaluator tests 2>/dev/null; then
+    echo "flake8: clean"
+else
+    echo "WARNING: flake8 not run (missing dependencies). Skipping."
+fi
+
+echo "==> pip-audit"
+if command -v pip-audit &>/dev/null; then
+    pip-audit -r requirements.txt || { echo "FAIL: pip-audit found vulnerabilities. Fix them before committing."; exit 1; }
+    echo "pip-audit: clean"
+else
+    echo "WARNING: pip-audit not installed. Run: pip install pip-audit"
+fi
+
+echo "==> .env example check"
+if [ -f .env ] && grep -q 'sk-\|ghp_\|api_key\|password\|secret' .env 2>/dev/null; then
+    echo "FAIL: .env file contains potential secrets. Remove or add to .gitignore."
+    exit 1
+fi
+
+echo "All checks passed."

@@ -1,0 +1,6 @@
+# Exclude internal files from source archives
+.github/ export-ignore
+.opencode/ export-ignore
+scripts/ export-ignore
+Makefile export-ignore
+.github/ export-ignore
