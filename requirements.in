@@ -7,8 +7,8 @@ jinja2>=3.1.2
 python-dotenv>=1.0.0
 
 # Optional LLM client dependencies
-openai>=1.12.0
-anthropic>=0.18.1
+openai>=2.41.1
+anthropic>=0.109.1
 httpx>=0.27.0
 
 # Development dependencies
@@ -18,5 +18,5 @@ mypy==2.1.0
 
 # API and Persistence
 fastapi>=0.128.0
-uvicorn>=0.40.0
+uvicorn>=0.49.0
 sqlmodel>=0.0.31
