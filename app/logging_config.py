@@ -3,7 +3,6 @@ import os
 from logging.handlers import RotatingFileHandler
 from app.config import Config
 
-
 # Filter patterns for redaction (consistent with the app's redactor)
 SENSITIVE_PATTERNS = [
     r"(?i)api[_-]?key\s*[:=]\s*['\"]?[a-zA-Z0-9_-]{10,}['\"]?",
