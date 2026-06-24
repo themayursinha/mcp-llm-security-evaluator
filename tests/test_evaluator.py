@@ -8,7 +8,7 @@ import os
 import tempfile
 from unittest.mock import patch
 
-os.environ.setdefault("EVALUATOR_DB_PATH", "/private/tmp/mcp_llm_security_evaluator_test.db")
+os.environ.setdefault("EVALUATOR_DB_PATH", "data/test_evaluator_history.db")
 
 from evaluator.runner import SecurityEvaluator  # noqa: E402
 from evaluator.llm import LLMClient  # noqa: E402

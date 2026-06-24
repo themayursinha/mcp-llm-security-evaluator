@@ -1,7 +1,7 @@
 from typing import Optional
 import os
 
-os.environ.setdefault("EVALUATOR_DB_PATH", "/private/tmp/mcp_llm_security_evaluator_api_test.db")
+os.environ.setdefault("EVALUATOR_DB_PATH", "data/test_api_evaluator_history.db")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
