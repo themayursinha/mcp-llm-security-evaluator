@@ -4,7 +4,7 @@ from sqlmodel import SQLModel, create_engine, Session, select
 from .models import EvaluationReport, LLMCache
 import hashlib
 import json
-from .security.redaction import redact
+from .security.redaction import redact_strict
 
 # Ensure the database directory exists. Tests can override this path to avoid
 # touching a checked-out history database.
@@ -52,20 +52,21 @@ def save_to_cache(provider: str, model: str, prompt: str, response: str, paramet
     cache_key = generate_cache_key(provider, model, prompt, parameters)
     prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
 
-    # Redact parameters before saving
+    # Redact parameters before saving. Strict mode: verify + fail closed.
     param_str = json.dumps(parameters, sort_keys=True)
     try:
-        redacted_params = json.loads(redact(param_str))
+        redacted_params = json.loads(redact_strict(param_str))
     except Exception:
-        redacted_params = parameters  # Fallback
+        # Fail closed: never persist original parameters or untrusted text.
+        redacted_params = {"redacted": True}
 
     cache_entry = LLMCache(
         cache_key=cache_key,
         prompt_hash=prompt_hash,
         provider=provider,
         model=model,
-        prompt=redact(prompt),
-        response=redact(response),
+        prompt=redact_strict(prompt),
+        response=redact_strict(response),
         parameters=redacted_params,
     )
 
@@ -92,12 +93,21 @@ def save_report_to_db(report: dict):
     summary = report.get("summary") or report.get("evaluation_summary", {})
     provider_info = report.get("provider_info", {})
 
-    # Redact sensitive data in the report JSON before saving
-    redacted_report = redact(json.dumps(report))
+    # Redact sensitive data in the report JSON before saving.
+    # redact_strict (VRH campaign 1, F2) verifies the output and fails closed
+    # to a withheld-content stub if any detected secret survives redaction —
+    # string-level redaction of serialized JSON can leak via structural
+    # corruption or escaped-quote boundaries even after a clean parse.
+    redacted_report = redact_strict(json.dumps(report))
     try:
         report_json = json.loads(redacted_report)
     except Exception:
-        report_json = report  # Fallback if json load fails after redaction
+        # Belt and braces: strict mode output is valid JSON by construction,
+        # but never fall back to the original report under any circumstance.
+        report_json = {
+            "redacted": True,
+            "note": "report content withheld: redaction produced unparseable output",
+        }
 
     db_report = EvaluationReport(
         overall_security_score=summary.get("overall_security_score", 0.0),
