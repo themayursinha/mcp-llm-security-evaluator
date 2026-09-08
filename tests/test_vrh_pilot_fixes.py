@@ -109,9 +109,9 @@ class TestFailClosedPersistence:
         adversarial = json.dumps({"callback_url": adversarial_url})
         leaked_plain = "KKKK1111kkkk" in redact(adversarial)
         leaked_strict = "KKKK1111kkkk" in redact_strict(adversarial)
-        assert not (leaked_strict and not leaked_plain), (
-            "strict leaked while plain did not — verification regression"
-        )
+        assert not (
+            leaked_strict and not leaked_plain
+        ), "strict leaked while plain did not — verification regression"
 
 
 class TestNestedOutboundSinkDetection:
