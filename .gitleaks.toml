@@ -1,0 +1,14 @@
+title = "MCP LLM Security Evaluator gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic credentials used by evaluator regression tests and mock examples"
+paths = [
+  '''^tests/test_vrh_pilot_fixes\.py$''',
+  '''^tests/''',
+  '''^docs/api\.md$''',
+  '''^prompts\.yaml$''',
+  '''^evaluator/mcp_client\.py$''',
+]
