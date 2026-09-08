@@ -7,7 +7,8 @@ useDefault = true
 description = "Synthetic credentials used by evaluator regression tests and mock examples"
 paths = [
   '''^tests/test_vrh_pilot_fixes\.py$''',
-  '''^tests/''',
+  '''^tests/test_evaluator\.py$''',
+  '''^tests/__pycache__/''',
   '''^docs/api\.md$''',
   '''^prompts\.yaml$''',
   '''^evaluator/mcp_client\.py$''',
