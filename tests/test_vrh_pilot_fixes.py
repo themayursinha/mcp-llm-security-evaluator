@@ -87,7 +87,9 @@ class TestFailClosedPersistence:
         # redaction must never leak — including through escaped-quote
         # corruption contexts.
         cases = [
-            json.dumps({"callback_url": 'https://x.example/p"}, "api_key": "KKKK1111kkkk", "z": "'}),
+            json.dumps(
+                {"callback_url": 'https://x.example/p"}, "api_key": "KKKK1111kkkk", "z": "'}
+            ),
             json.dumps({"config": {"api_key": "MMMM2222nnnn"}}),
             "api_key=OOOO3333pppp",
             "password: hunter2secret",

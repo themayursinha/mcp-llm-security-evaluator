@@ -55,7 +55,11 @@ JSON_KEYED_SECRET_PATTERNS = [
     SensitivePattern("api_key", r'"\s*api[\s_-]?key\s*"\s*:\s*"?([^"\n]{6,})"?', re.IGNORECASE),
     SensitivePattern("password", r'"\s*password\s*"\s*:\s*"?([^"\n]{3,})"?', re.IGNORECASE),
     SensitivePattern("password", r'"\s*pwd\s*"\s*:\s*"?([^"\n]{3,})"?', re.IGNORECASE),
-    SensitivePattern("token", r'"\s*(?:access_)?token\s*"\s*:\s*"?([a-zA-Z0-9._-]{8,})"?', re.IGNORECASE),
+    SensitivePattern(
+        "token",
+        r'"\s*(?:access_)?token\s*"\s*:\s*"?([a-zA-Z0-9._-]{8,})"?',
+        re.IGNORECASE,
+    ),
     SensitivePattern(
         "secret",
         r'"\s*(?:secret|secret_key|private_key)\s*"\s*:\s*"?([a-zA-Z0-9._/+=-]{6,})"?',
