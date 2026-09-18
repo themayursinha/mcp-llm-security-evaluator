@@ -19,5 +19,5 @@ mypy==2.3.1
 # API and Persistence
 fastapi>=0.141.1
 starlette>=1.6.0
-uvicorn>=0.52.4
+uvicorn>=0.53.0
 sqlmodel>=0.0.42
