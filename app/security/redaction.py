@@ -1,3 +1,4 @@
+import json
 import re
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional, Iterable
@@ -44,6 +45,59 @@ DEFAULT_SENSITIVE_PATTERNS = [
     SensitivePattern("url", r"ftp://[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/[^\s]*)?"),
     SensitivePattern("secret", r"\bsecret\b", generic=True),
 ]
+
+# VRH campaign 1, F1: JSON serializes keyed secrets as '"key": "value"', and
+# the quote between key and value breaks every 'key[:=]value' pattern above.
+# These variants accept the JSON form so keyed secrets are redacted in
+# serialized payloads too. Values use a permissive charset; the surrounding
+# quote/colon context keeps false positives low.
+JSON_KEYED_SECRET_PATTERNS = [
+    SensitivePattern("api_key", r'"\s*api[\s_-]?key\s*"\s*:\s*"?([^"\n]{6,})"?', re.IGNORECASE),
+    SensitivePattern("password", r'"\s*password\s*"\s*:\s*"?([^"\n]{3,})"?', re.IGNORECASE),
+    SensitivePattern("password", r'"\s*pwd\s*"\s*:\s*"?([^"\n]{3,})"?', re.IGNORECASE),
+    SensitivePattern(
+        "token",
+        r'"\s*(?:access_)?token\s*"\s*:\s*"?([a-zA-Z0-9._-]{8,})"?',
+        re.IGNORECASE,
+    ),
+    SensitivePattern(
+        "secret",
+        r'"\s*(?:secret|secret_key|private_key)\s*"\s*:\s*"?([a-zA-Z0-9._/+=-]{6,})"?',
+        re.IGNORECASE,
+    ),
+]
+
+DEFAULT_SENSITIVE_PATTERNS.extend(JSON_KEYED_SECRET_PATTERNS)
+
+# VRH campaign 1, F2 (adversarial validation extension): after a URL match
+# consumes an escaped-quote boundary, keyed secrets inside the residual
+# string appear in ESCAPED-QUOTE form (\\"key\\": \\"value\\") which neither
+# the plain nor the plain-JSON patterns match. These variants catch that
+# escaped form. They run last so earlier patterns take precedence.
+ESCAPED_JSON_KEYED_SECRET_PATTERNS = [
+    SensitivePattern(
+        "api_key",
+        r'\\+"?\s*api[\s_-]?key\s*\\*"?\s*\\*:\s*\\*"?([a-zA-Z0-9._-]{6,})',
+        re.IGNORECASE,
+    ),
+    SensitivePattern(
+        "password",
+        r'\\+"?\s*password\s*\\*"?\s*\\*:\s*\\*"?([^"\\]{3,})',
+        re.IGNORECASE,
+    ),
+    SensitivePattern(
+        "token",
+        r'\\+"?\s*(?:access_)?token\s*\\*"?\s*\\*:\s*\\*"?([a-zA-Z0-9._-]{8,})',
+        re.IGNORECASE,
+    ),
+    SensitivePattern(
+        "secret",
+        r'\\+"?\s*(?:secret|secret_key)\s*\\*"?\s*\\*:\s*\\*"?([a-zA-Z0-9._/+=-]{6,})',
+        re.IGNORECASE,
+    ),
+]
+
+DEFAULT_SENSITIVE_PATTERNS.extend(ESCAPED_JSON_KEYED_SECRET_PATTERNS)
 
 
 def _patterns_by_category(patterns: Iterable[SensitivePattern]) -> Dict[str, List[str]]:
@@ -162,6 +216,28 @@ _redactor = DataRedactor()
 def redact(text: str, custom_patterns: Optional[Dict[str, List[str]]] = None) -> str:
     """Simple redaction function for backward compatibility."""
     return _redactor.redact(text, custom_patterns)
+
+
+def redact_strict(text: str, custom_patterns: Optional[Dict[str, List[str]]] = None) -> str:
+    """Redact, then verify; fail closed if any sensitive data survives.
+
+    VRH campaign 1 (F2) showed that redacting serialized JSON with
+    string-level regexes can leak: structural corruption or escaped-quote
+    boundaries leave detected secrets in the output even after a clean
+    parse. Persistence paths use this variant: on verification failure the
+    caller receives a withheld-content stub instead of possibly-leaky text.
+    """
+    result = _redactor.redact(text, custom_patterns)
+    remaining = find_sensitive_data(result)
+    if not remaining:
+        return result
+    return json.dumps(
+        {
+            "redacted": True,
+            "note": "content withheld: residual sensitive data detected after redaction",
+            "residual_categories": sorted({f["category"] for f in remaining}),
+        }
+    )
 
 
 def detect_sensitive_data(text: str) -> Dict[str, List[str]]:
