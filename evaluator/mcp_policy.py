@@ -180,9 +180,29 @@ class MCPPolicy:
             for token in ["web", "http", "post", "slack", "email", "browser", "upload"]
         ):
             return True
-        return any(
-            key.lower() in {"url", "callback_url", "webhook", "endpoint"} for key in parameters
-        )
+
+        # VRH campaign 1, F4: exfiltration destinations are frequently nested
+        # inside structured parameters (configs, options, recipient lists).
+        # A top-level key check misses them entirely, bypassing the chain
+        # rule with trivial wrapping. Walk the full parameter structure.
+        return self._has_outbound_destination(parameters)
+
+    _OUTBOUND_KEYS = {"url", "callback_url", "webhook", "endpoint"}
+    _MAX_SCAN_DEPTH = 8
+
+    def _has_outbound_destination(self, value: Any, depth: int = 0) -> bool:
+        if depth > self._MAX_SCAN_DEPTH:
+            return False
+        if isinstance(value, dict):
+            for key, nested in value.items():
+                if str(key).lower() in self._OUTBOUND_KEYS:
+                    return True
+                if self._has_outbound_destination(nested, depth + 1):
+                    return True
+            return False
+        if isinstance(value, (list, tuple)):
+            return any(self._has_outbound_destination(item, depth + 1) for item in value)
+        return False
 
     def _contains_token(self, value: Any) -> bool:
         text = str(value)
